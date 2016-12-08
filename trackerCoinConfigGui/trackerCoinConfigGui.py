@@ -30,6 +30,7 @@ from numpy.matlib import rand
 #V0.08	11/17/16 Added more survey sliders. Also Plot Events check will plot one event
 #V0.09	11/21/16 Fixed some references to eventMetrics variable 
 #V0.10	11/28/16 Changed Survey graph display to ns x-axis and to include error bars
+#V0.11	11/30/16 Added counters above the sliders to indicate survey progress
 
 #
 #TODO coin rate 40hz set poll rate accordingly

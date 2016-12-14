@@ -31,6 +31,8 @@ from numpy.matlib import rand
 #V0.09	11/21/16 Fixed some references to eventMetrics variable 
 #V0.10	11/28/16 Changed Survey graph display to ns x-axis and to include error bars
 #V0.11	11/30/16 Added counters above the sliders to indicate survey progress
+#V0.12	12/14/16 Changed some of the task scheduling 
+
 
 #
 #TODO coin rate 40hz set poll rate accordingly
@@ -262,10 +264,15 @@ def setTrg():
 		
 def pollEnableChkCmd():
 	#Check box is clicked, start or stop eventPolling task
+	global eventPollingTask
+
+	
 	if (eventPollingEnable.get()):
 		logging.info("Enable Trigger")
 		enableTrigger()
-		eventPolling()
+# 		eventPolling()
+		eventPollingTask = rootTk.after(1, eventPolling)
+
 	else : 
 		newEventVar.set(True)
 		rootTk.after_cancel(eventPollingTask)
@@ -311,9 +318,12 @@ def eventPolling():
 # 	if (trackerEventNum != EventNum):
 # 		EventNum = trackerEventNum
 # 		logging.info("trackerEventNum = %r", trackerEventNum)
-	getEvent(eventPlotEnable.get())
+# 	getEvent(eventPlotEnable.get())
 	if (eventPollingEnable.get()):
 		eventPollingTask = rootTk.after(20, eventPolling)
+		
+	getEvent(eventPlotEnable.get())
+
 # 	else: 
 # 		logging.info("Disable Trigger")
 # 		disableTrigger()
@@ -678,7 +688,7 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.11")
+rootTk.title("Tracker Config V0.12")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 # Tk()

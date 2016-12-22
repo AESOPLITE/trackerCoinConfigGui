@@ -32,7 +32,7 @@ from numpy.matlib import rand
 #V0.10	11/28/16 Changed Survey graph display to ns x-axis and to include error bars
 #V0.11	11/30/16 Added counters above the sliders to indicate survey progress
 #V0.12	12/14/16 Changed some of the task scheduling 
-
+#V0.13	12/19/16 Changed to interactive mode for plotting events
 
 #
 #TODO coin rate 40hz set poll rate accordingly
@@ -274,6 +274,8 @@ def pollEnableChkCmd():
 		eventPollingTask = rootTk.after(1, eventPolling)
 
 	else : 
+		plt.ioff()
+		
 		newEventVar.set(True)
 		rootTk.after_cancel(eventPollingTask)
 		rootTk.after_cancel(waitNewEventTask)
@@ -297,6 +299,15 @@ def pollEnableChkCmd():
 		for board in Boards:
 			getShuntCurrent(board,'digi25')
 	
+def plotEnableChkCmd():
+	if (eventPlotEnable.get()) :
+		plt.ion()
+		plt.draw()
+		logging.info("Plot interactive mode ")
+	else:
+		plt.ioff()
+		plt.clf()
+#		plt.close()
 		
 def eventPolling():
 	#infinite loop to poll the tracker for events
@@ -450,7 +461,8 @@ def getEvent(showPlot):
 		plt.xlim(-20,220)
 		plt.xlabel('x (mm)')
 		plt.ylabel('y (mm)')
-		plt.show()
+# 		plt.show()
+# 		plt.draw()
 	
 def surveyTrg():	
 # 	Survey and graph all possible combinations of trig delay and window
@@ -461,6 +473,9 @@ def surveyTrg():
 	global waitNewEventTask
 # 	global bufSpeed, fpgaTrgDly
 	global surveyTrgIterVar, surveyTrgDlyVar, surveyTrgWinVar, surveyBufSpdVar, surveyFpgaTrgDlyVar
+	
+	
+	plt.ioff()
 	
 	minBufSpd = surveyBuffSpdMinScl.get()
 	maxBufSpd = surveyBuffSpdMaxScl.get() + 1
@@ -688,7 +703,7 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.12")
+rootTk.title("Tracker Config V0.13")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 # Tk()
@@ -729,7 +744,7 @@ configIntTWSpinLbl = Label(frameAL, text="Int Width")
 eventPollingEnable = IntVar()
 pollEnableChk = Checkbutton(frameAL, text="Poll Events", variable=eventPollingEnable, command=pollEnableChkCmd)
 eventPlotEnable = IntVar()
-plotEnableChk = Checkbutton(frameAL, text="Plot Events", variable=eventPlotEnable)
+plotEnableChk = Checkbutton(frameAL, text="Plot Events", variable=eventPlotEnable, command=plotEnableChkCmd)
 surveyTrgIterVar = StringVar()
 surveyTrgIterLbl = Label(frameAL, textvariable=surveyTrgIterVar)
 surveyTrgDlyVar = StringVar()

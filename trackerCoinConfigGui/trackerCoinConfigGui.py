@@ -33,6 +33,7 @@ from numpy.matlib import rand
 #V0.11	11/30/16 Added counters above the sliders to indicate survey progress
 #V0.12	12/14/16 Changed some of the task scheduling 
 #V0.13	12/19/16 Changed to interactive mode for plotting events
+#V0.14	12/22/16 Survey series changed from Trig Delay var to FPGA Delay
 
 #
 #TODO coin rate 40hz set poll rate accordingly
@@ -391,6 +392,7 @@ def getMissedTrg():
 	
 def getEvent(showPlot):
 	#get a tracker event and plot it if showPlot is true
+	#TODO add per board counters and printout on labels
 	global countEvents
 	global countClusters
 	pitch = 0.228						 #pitch of the detector
@@ -489,7 +491,9 @@ def surveyTrg():
 	minTrgDly = surveyTrgDlyMinScl.get()
 	maxTrgDly = surveyTrgDlyMaxScl.get() + 1
 	rangeTrgDly= range(minTrgDly, maxTrgDly)
-	eventMetrics = np.zeros((maxBufSpd,maxTrgWin,maxFpgaTrgDly,maxTrgDly),dtype=float,order='C')
+# 	eventMetrics = np.zeros((maxBufSpd,maxTrgWin,maxFpgaTrgDly,maxTrgDly),dtype=float,order='C')
+	eventMetrics = np.zeros((maxBufSpd,maxTrgWin,maxTrgDly,maxFpgaTrgDly),dtype=float,order='C')
+
 	sampleEvents = surveyTrgIterScl.get()
 # 	for idxBufSpd in rangeBufSpd:
 # 		for idxTrgWin in rangeTrgWin:
@@ -501,10 +505,14 @@ def surveyTrg():
 		surveyBufSpdVar.set(str(idxBufSpd))
 		for idxTrgWin in rangeTrgWin:
 			surveyTrgWinVar.set(str(idxTrgWin))
-			for idxFpgaTrgDly in rangeFpgaTrgDly :
-				surveyFpgaTrgDlyVar.set(str(idxFpgaTrgDly))
-				for idxTrgDly in rangeTrgDly:
-					surveyTrgDlyVar.set(str(idxTrgDly))
+			for idxTrgDly in rangeTrgDly:
+				surveyTrgDlyVar.set(str(idxTrgDly))
+# 			for idxFpgaTrgDly in rangeFpgaTrgDly :
+# 				surveyFpgaTrgDlyVar.set(str(idxFpgaTrgDly))
+# 				for idxTrgDly in rangeTrgDly:
+# 					surveyTrgDlyVar.set(str(idxTrgDly))
+				for idxFpgaTrgDly in rangeFpgaTrgDly :
+					surveyFpgaTrgDlyVar.set(str(idxFpgaTrgDly))
 					resetBoards() # Full reset seems needed
 					configTrgReg(idxBufSpd, idxTrgDly, idxTrgWin)
 					triggerSetup(0,idxFpgaTrgDly,1)
@@ -535,24 +543,30 @@ def surveyTrg():
 		# 				EventNum = trackerEventNum
 						iterEvents += 1
 					if (lastCountEvents == countEvents):
-						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = 0.0
+# 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = 0.0
+						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = 0.0
+
 					else:
-						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = float(countClusters - lastCountClusters) / float(countEvents - lastCountEvents)
-						logging.info("eventMetrics[ %d , %d , %d , %d ] = %f", idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly, eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly])
+# 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = float(countClusters - lastCountClusters) / float(countEvents - lastCountEvents)
+						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = float(countClusters - lastCountClusters) / float(countEvents - lastCountEvents)
+						logging.info("eventMetrics[ %d , %d , %d , %d ] = %f", idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly, eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly])
 		
 					disableTrigger()
 		
 # 	logging.info("Eventmetrics = %d", eventMetrics[0][0])
 	dotColors = ['w','g','r','c','m','y','k','b']
-	dotTypes = ['o','+','x','v','s','p','H','D','8','^','.','1','2','3','4','*']
+# 	dotTypes = ['o','+','x','v','s','p','H','D','8','^','.','1','2','3','4','*']
+	dotTypes = ['o','+','x','v','s','p','H','D','8','^','.','1','2','3','4','*','o','+','x','v','s','p','H','D','8','^','.','1','2','3','4','*']
 	lineTypes = ['--','-']
 # 	maxPlots = len(rangeBufSpd) * len(rangeTrgWin) * len(rangeFpgaTrgDly)
 # 	eventPlots = range(maxPlots)
 # 	eventLabels = range(maxPlots)
 	for idxBufSpd in rangeBufSpd:
 		for idxTrgWin in rangeTrgWin:
-			for idxFpgaTrgDly in rangeFpgaTrgDly :
-				timeDly = list(map(lambda x: ((((idxBufSpd + 1) * x) - idxFpgaTrgDly) * 100), rangeTrgDly))
+# 			for idxFpgaTrgDly in rangeFpgaTrgDly :
+			for idxTrgDly in rangeTrgDly:
+# 				timeDly = list(map(lambda x: ((((idxBufSpd + 1) * x) - idxFpgaTrgDly) * 100), rangeTrgDly))
+				timeDly = list(map(lambda x: ((((idxBufSpd + 1) * idxTrgDly) - x) * 100), rangeFpgaTrgDly))
 	# 			logging.info("eventMetrics[ %d , %d , %d ] = %d", idxBufSpd, idxTrgWin, 0, eventMetrics[idxBufSpd, idxTrgWin, 0])
 	# 			eventPlots[0 ] = plt.plot(rangeTrgDly, eventMetrics[idxBufSpd,idxTrgWin,:], 'ro-')#dotColors[idxBufSpd] + dotTypes[idxTrgWin] + '-')
 	# 			ls = dotColors[idxBufSpd] + dotTypes[idxTrgWin] + '-'
@@ -562,9 +576,10 @@ def surveyTrg():
 # 				plt.plot(timeDly, eventMetrics[idxBufSpd,idxTrgWin,idxFpgaTrgDly,:], dotColors[idxBufSpd] + dotTypes[idxFpgaTrgDly] + lineTypes[idxTrgWin], label= str('BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin))) #dotColors[idxBufSpd] + dotTypes[idxTrgWin] + '-')
 				error = ((idxBufSpd + 1) * (100 + idxTrgWin * 50))
 				autoLabel = '_' #exclude from legend unless it meets the criteria in the next statement
-				if (((idxFpgaTrgDly == rangeFpgaTrgDly[0]) & (idxTrgWin == rangeTrgWin[0])) | ((idxBufSpd == rangeBufSpd[-1]) & (idxTrgWin == rangeTrgWin[-1]))) : autoLabel = ''
-				plt.errorbar(timeDly, eventMetrics[idxBufSpd,idxTrgWin,idxFpgaTrgDly,:], 0, error, dotColors[idxBufSpd] + dotTypes[idxFpgaTrgDly] + lineTypes[idxTrgWin], label= str(autoLabel + 'BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin) + ' FD ' + str(idxFpgaTrgDly))) 
-				
+# 				if (((idxFpgaTrgDly == rangeFpgaTrgDly[0]) & (idxTrgWin == rangeTrgWin[0])) | ((idxBufSpd == rangeBufSpd[-1]) & (idxTrgWin == rangeTrgWin[-1]))) : autoLabel = ''
+# 				plt.errorbar(timeDly, eventMetrics[idxBufSpd,idxTrgWin,idxFpgaTrgDly,:], 0, error, dotColors[idxBufSpd] + dotTypes[idxFpgaTrgDly] + lineTypes[idxTrgWin], label= str(autoLabel + 'BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin) + ' FD ' + str(idxFpgaTrgDly))) 
+				if (((idxTrgDly == rangeTrgDly[0]) & (idxTrgWin == rangeTrgWin[0])) | ((idxBufSpd == rangeBufSpd[-1]) & (idxTrgWin == rangeTrgWin[-1]))) : autoLabel = ''
+				plt.errorbar(timeDly, eventMetrics[idxBufSpd,idxTrgWin,idxTrgDly,rangeFpgaTrgDly], 0, error, dotColors[idxBufSpd] + dotTypes[idxTrgDly] + lineTypes[idxTrgWin], label= str(autoLabel + 'BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin) + ' TD ' + str(idxTrgDly))) 
 	# 			eventLabels[(idxBufSpd - minBufSpd) * len(rangeTrgWin) + (idxTrgWin - minTrgWin) ] = 'BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin)
 # 	l1, l2 = plt.plot(rangeTrgDly, eventMetrics[0,:], 'bs-', rangeTrgDly, eventMetrics[1,:], 'ro-')
 	plt.title("Detector Chips / Events (Sample: " + str(sampleEvents) + " events)")
@@ -703,7 +718,7 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.13")
+rootTk.title("Tracker Config V0.14")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 # Tk()
@@ -766,9 +781,9 @@ surveyTrgWinMaxScl.set(1)
 surveyTrgDlyMinScl = Scale(frameAL, from_=0, to=31, orient=VERTICAL, command=fixRangeMin)
 surveyTrgDlyMaxScl = Scale(frameAL, from_=0, to=31, orient=HORIZONTAL, label="Min|Trig Dly|Max", command=fixRangeMax)
 surveyTrgDlyMaxScl.set(31)
-surveyFpgaTrgDlyMinScl = Scale(frameAL, from_=0, to=15, orient=VERTICAL, command=fixRangeMin)
-surveyFpgaTrgDlyMaxScl = Scale(frameAL, from_=0, to=15, orient=HORIZONTAL, label="Min|FPGA Dly|Max", command=fixRangeMax)
-surveyFpgaTrgDlyMaxScl.set(15)
+surveyFpgaTrgDlyMinScl = Scale(frameAL, from_=0, to=255, orient=VERTICAL, command=fixRangeMin)
+surveyFpgaTrgDlyMaxScl = Scale(frameAL, from_=0, to=255, orient=HORIZONTAL, label="Min|FPGA Dly|Max", command=fixRangeMax)
+surveyFpgaTrgDlyMaxScl.set(255)
 missedTBut = Button(frameAL, text="Get Missed", command=getMissedTrg)
 missedTVar = StringVar()
 missedTVar.set("Missed Triggers:    0")

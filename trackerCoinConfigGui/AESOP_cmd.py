@@ -157,18 +157,18 @@ def readReg():
   ID = binascii.hexlify(nextByte)
   logging.debug('ID=' + ID)
   if ID == "c7": 
-      logging.info('Register read')  
+      logging.debug('Register read')  
       Byte = ser.read() 
       nData = int(binascii.hexlify(Byte),16)-1
-      logging.info('    Number of data bytes being returned is %d', nData) 
+      logging.debug('    Number of data bytes being returned is %d', nData) 
       firstByte = ser.read() 
       secondByte = ser.read() 
       cmdCnt = int(binascii.hexlify(firstByte+secondByte),16)
-      logging.info('    Command count=%d' ,cmdCnt)      
+      logging.debug('    Command count=%d' ,cmdCnt)      
       brdAddress = binascii.hexlify(ser.read())
-      logging.info('    The board address is ' + brdAddress)
+      logging.debug('    The board address is ' + brdAddress)
       cmdCode = binascii.hexlify(ser.read())
-      logging.info('    The command code was ' + cmdCode)
+      logging.debug('    The command code was ' + cmdCode)
       returnReg = [cmdCnt,cmdCode]
       for nByte in range(nData):
           Byte = ser.read()
@@ -176,10 +176,10 @@ def readReg():
           if Byte != '':
               intByte = int(binascii.hexlify(Byte),16)
               strByte = bin(intByte)
-              logging.info('      Data Byte %d: %s  %d',nByte,strByte,intByte)
-          else: logging.info('      Blank byte encountered')
+              logging.debug('      Data Byte %d: %s  %d',nByte,strByte,intByte)
+          else: logging.debug('      Blank byte encountered')
       endByte = binascii.hexlify(ser.read())
-      logging.info('    End byte = ' + endByte)
+      logging.debug('    End byte = ' + endByte)
       return returnReg      
   else:
     if ID == "f1":
@@ -470,10 +470,10 @@ def getTriggerCount(Address):
     send([binascii.unhexlify(hexAdr),"\x68","\x00"])
     stuff=readReg()
     if stuff[1] == '68':
-        logging.info("getTriggerCount, Byte2=%s",getBinaryString(stuff[2]))
-        logging.info("getTriggerCount, Byte3=%s",getBinaryString(stuff[3]))
+        logging.debug("getTriggerCount, Byte2=%s",getBinaryString(stuff[2]))
+        logging.debug("getTriggerCount, Byte3=%s",getBinaryString(stuff[3]))
         numb = getBinaryString(stuff[2]) + getBinaryString(stuff[3])
-        logging.info("getTriggerCount, Count=%s",numb)
+        logging.debug("getTriggerCount, Count=%s",numb)
         numbInt= int(numb,2)
         return numbInt
     else: return 0

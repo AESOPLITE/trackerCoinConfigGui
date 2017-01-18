@@ -2,7 +2,10 @@ import string
 import time
 import logging
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import numpy as np
+import datetime
+import csv
 
 #All of the functions are stored in another file
 from AESOP_cmd import *
@@ -34,18 +37,20 @@ from numpy.matlib import rand
 #V0.12	12/14/16 Changed some of the task scheduling 
 #V0.13	12/19/16 Changed to interactive mode for plotting events
 #V0.14	12/22/16 Survey series changed from Trig Delay var to FPGA Delay
+#V0.15	01/09/16 Added FPGA buf spinbox
+#V0.16	01/17/16 Added many things to for full board integration. CSV even data file, Clear plot each event, Tracker Geometry with diff series for bending plane, ASIC power off button, new labels
+
 
 #
 #TODO coin rate 40hz set poll rate accordingly
-#TODO scan 2d parameter space of ASIC trigger delay with commands and better event metric
 
 #Globals
 Boards =[]
 trgList = dict({'0 ext' : 0, '1 ext & int' : 1, '2 ext or int' : 2, '3 int' : 3})
 nError = 0
-EventNum = 0
+eventNum = 0
 countEvents = 0
-countClusters = 0
+countChips = 0
 
 
 
@@ -54,6 +59,11 @@ def setCOM():
 	comChannel = "COM" + comSpin.get()	 #Careful, this channel assignment can change if the PC is rebooted.
 	logging.info("Opening COM channel %s for UART communication with the master board via USB." % comChannel)
 	openCOM(comChannel)
+	
+def closeCOM():
+	global ser
+	ser.close()
+	logging.info("Closed COM channel")
 
 def setBoards():
 	global Boards    # modify global copy of Boards
@@ -146,7 +156,7 @@ def resetBoards():
 					nError = nError + 1
 	
 	# Load all of the threshold DACs and read them back and check the values
-	Thresholds = [30,20,20,20,20,20,30]
+	Thresholds = [21,20,20,20,20,24,20]
 	for board in Boards:
 			for chip in range(12):
 				Range = 0
@@ -162,7 +172,6 @@ def resetBoards():
 				if int(response[1:8],2) != Value: 
 					logging.error('		Wrong value returned by chip %d for the threshold DAC setting',chip)	
 					nError = nError + 1
-	
 			
 	# Load all of the calibration masks and read them back and check the settings
 	for board in []:	 
@@ -214,9 +223,16 @@ def resetBoards():
 # 	triggerSetup(0,0,1)
 	logging.info("The number of register load/read errors= %d",nError)
 	
+def asicOff():
+	ASICpowerOFF(7)	
+	logging.info("Turn the power off to the ASICs")
+
+	
 def configBoards():
 	# Get trigger variables and Load all of the configuration registers and read them back, checking the settings
 	configTrgReg(configBSSpin.get(), configTDSpin.get(), configTWVar.get())
+	triggerSetup(0,int(configFDSpin.get()),1)
+
 
 	
 def configTrgReg(bufSpeed, trgDly, trgWin):
@@ -316,19 +332,19 @@ def eventPolling():
 	global eventPollingTask
 	global waitNewEventTask
 
-# 	global EventNum
+# 	global eventNum
 	
 	
 # # 	logging.info("init polling")
 # # 		logging.info("test polling")
 # 	trackerEventNum = getTriggerCount(0)
-# 	logging.info("EventNum = %r trackerEventNum = %r", EventNum, trackerEventNum)
+# 	logging.info("eventNum = %r trackerEventNum = %r", eventNum, trackerEventNum)
 	
 	newEventVar.set(False)
 	waitNewEventTask = rootTk.after(1, waitNewEvent)
 	rootTk.wait_variable(newEventVar)
-# 	if (trackerEventNum != EventNum):
-# 		EventNum = trackerEventNum
+# 	if (trackerEventNum != eventNum):
+# 		eventNum = trackerEventNum
 # 		logging.info("trackerEventNum = %r", trackerEventNum)
 # 	getEvent(eventPlotEnable.get())
 	if (eventPollingEnable.get()):
@@ -358,7 +374,7 @@ def eventPolling():
 # 			getShuntCurrent(board,'digi25')
 	
 def waitNewEvent():
-	global EventNum
+	global eventNum
 	global newEventVar
 	global waitNewEventTask
 	
@@ -368,13 +384,13 @@ def waitNewEvent():
 # 		if readTriggerNotice() == True :
 # 			newEventVar.set(True)
 		trackerEventNum = getTriggerCount(0)
-		if (EventNum != trackerEventNum) :
-			logging.debug("EventNum = %r trackerEventNum = %r", EventNum, trackerEventNum)
+		if (eventNum != trackerEventNum) :
+			logging.debug("eventNum = %r trackerEventNum = %r", eventNum, trackerEventNum)
 	#		trackerEventNumHex = (trackerEventNum[2])[2:3] + (trackerEventNum[3])[2:3]
 # 			trackerEventNumHex = trackerEventNum[3]
 # 			trackerEventNum2Byte = 256 * int(binascii.hexlify(trackerEventNum[2]),16) + int(binascii.hexlify(trackerEventNum[3]),16)
-# 			if (trackerEventNum2Byte != EventNum):
-			EventNum = trackerEventNum
+# 			if (trackerEventNum2Byte != eventNum):
+			eventNum = trackerEventNum
 			newEventVar.set(True)
 # 			else :
 # 				waitNewEventTask = rootTk.after(20, waitNewEvent)
@@ -393,15 +409,20 @@ def getMissedTrg():
 def getEvent(showPlot):
 	#get a tracker event and plot it if showPlot is true
 	#TODO add per board counters and printout on labels
+	#TODO Add separate csv file for event data format smeting like timestamp, event#, board#, strip data...
 	global countEvents
-	global countClusters
+	global countChips
+	global countTrackerChips
+	global eventNumVar
+	global countChipsVar
+	global countTrackerChipsVar
 	pitch = 0.228						 #pitch of the detector
 	middlefirststrip = 0.035
 	gapwidth = 0.075
 	detectoredge = 1.088				#distance between the middle of the last strip and the edge of the detector
 	middlefirststripchip6 = 87.359 + gapwidth + 2*detectoredge
 	
-	y= [0,101,202,303,404,505,606]
+	y= [212,192,126,60,40,20,0]
 # 	enableTrigger()
 # 	for j in range(20):
 	#	nTry = 0
@@ -415,62 +436,188 @@ def getEvent(showPlot):
 # 	logging.info("j= %d",j)
 # 	time.sleep(0.1)
 	ReadTkrEventResult = ReadTkrEvent(0,False,True)	
-	logging.info("ReadTkrEventResult = %r", ReadTkrEventResult)
+	logging.debug("ReadTkrEventResult = %r", ReadTkrEventResult)
 	[boardData,errorCode] = ReadTkrEventResult
 	
 	countEvents += 1
 	chipHit = False
 	if boardData :
 		
-		logging.info("boardData = %r ", boardData)
-		boardDataChips = int(boardData[0]['nChips'])
-		countClusters += boardDataChips #TODO actual calc of clusters 
-		if (boardDataChips > 0) : #TODO more inclusive logic
-			chipHit = True
+		
+		logging.debug("boardData = %r ", boardData)
+# 		boardDataChips = int(boardData[0]['nChips'])
+# 		countChips += boardDataChips #TODO actual calc of clusters 
+# 		if (boardDataChips > 0) : #TODO more inclusive logic
+# 			chipHit = True
+		#boardDataChips is redundant 
 	
+		for Data in boardData:
+		
+			dataChips = int(Data['nChips'])
+			dataRow=[]
+			dataBoardAddress = int(Data['address']) % 8 #make address of master from 8 to 0	
+			dataFirstStrip = Data['firstStrip']
+			countTrackerChips[dataBoardAddress] += dataChips
+			countChips += dataChips #TODO actual calc of clusters 
+			dataRow.append(datetime.datetime.utcnow())
+			dataRow.append(eventNum)
+			dataRow.append(dataBoardAddress)
+			dataRow.extend(dataFirstStrip)
+# 			dataFirstStrip.insert(0, countEvents)
+						
+			
+			csvW.writerow(dataRow)
+			if (dataChips > 0) : #TODO more inclusive logic
+				chipHit = True
+	
+	eventNumVar.set("Event Num: " + str(eventNum))
+	countChipsVar.set("Total Chip Hits: " + str(countChips))
+	countTrackerChipsVar.set("Chip Hits per Board: " + str(countTrackerChips))			
 	xList = [0]*7
 	for lyr in range(7): xList[lyr]= []
 	numberOfChips= [0]*7
 #Convert the location of the hits to coordinates in mm, differentiate between the first 6 chips and that last 6 to account for the gap in between the detectors 
 	nLyrHit = 0
-	xplt = []
-	yplt = []
+	xpltNonBend = []
+	ypltNonBend = []
+	xpltBend = []
+	ypltBend = []
 	if (showPlot & chipHit):
+		plt.clf()
 		for Data in boardData:
-			logging.info("Data = %r", Data)
+			logging.debug("Data = %r", Data)
 			for lyr in [8,1,2,3,4,5,6]:
-				logging.info("Data['address'] = %r lyr = %r", Data['address'], lyr)
+				logging.debug("Data['address'] = %r lyr = %r", Data['address'], lyr)
 				if Data['address'] == lyr:			
 					if len(Data['firstStrip'])>0:
 						nLyrHit = nLyrHit + 1
 						if lyr == 8: lidx=0
 						else: lidx=lyr
-						for i in Data['firstStrip']:
-							if 0 <= i < 384:
-								x = round((middlefirststrip+((i-0.5)*pitch)), 3)
-								xList[lidx].append(x)
-								xplt.append(x)
-								yplt.append(y[lidx])
-							else: 
-								x= round((middlefirststripchip6+((i-384.5)*pitch)), 3)
-								xList[lidx].append(x)
-								xplt.append(x)
-								yplt.append(y[lidx])
+						if lidx in [0,4,6] :
+							for i in Data['firstStrip']:
+								if 0 <= i < 384:
+									x = round((middlefirststrip+((i-0.5)*pitch)), 3)
+									xList[lidx].append(x)
+									xpltNonBend.append(x)
+									ypltNonBend.append(y[lidx])
+								else: 
+									x= round((middlefirststripchip6+((i-384.5)*pitch)), 3)
+									xList[lidx].append(x)
+									xpltNonBend.append(x)
+									ypltNonBend.append(y[lidx])
+						else :
+							for i in Data['firstStrip']:
+								if 0 <= i < 384:
+									x = round((middlefirststrip+((i-0.5)*pitch)), 3)
+									xList[lidx].append(x)
+									xpltBend.append(x)
+									ypltBend.append(y[lidx])
+								else: 
+									x= round((middlefirststripchip6+((i-384.5)*pitch)), 3)
+									xList[lidx].append(x)
+									xpltBend.append(x)
+									ypltBend.append(y[lidx])
 						numberOfChips[lidx]=Data['nChips']
 				continue
-		plt.plot(xplt,yplt,linestyle='none',marker='o')
-		plt.ylim(-50,650)
+# 		plt.plot(xpltNonBend,ypltNonBend,linestyle='none',marker='o',label="NonBending Plane")
+# 		plt.plot(xpltBend,ypltBend,linestyle='none',marker='o',label="Bending Plane")
+# 		plt.ylim(-50,250)
+# 		plt.xlim(-20,220)
+# 		plt.xlabel('Position in Respective Plane (mm)')
+# 		plt.ylabel('Z (mm)')
+# 		plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='medium')
+		#fig = plt.figure()
+		#ax = fig.add_axes([0.1, 0.1, 0.6, 0.85])
+		#ax.plot(xpltNonBend,ypltNonBend,linestyle='none',marker='o',label="NonBending Plane")
+		#ax.plot(xpltBend,ypltBend,linestyle='none',marker='o', color='red',label="Bending Plane")
+		plt.plot(xpltNonBend,ypltNonBend,linestyle='none',marker='o',label="NonBending Plane")
+		plt.plot(xpltBend,ypltBend,linestyle='none',marker='o', color='red',label="Bending Plane")
+		#topMag = patches.Rectangle([0,134], 200, 50, color='grey')
+		#botMag = patches.Rectangle([0,68], 200, 50, color='grey')
+		#ax.add_patch(topMag)
+		#ax.add_patch(botMag)
+		#plt.add_patch(topMag)
+		#plt.add_patch(botMag)
+		plt.ylim(-50,250)
 		plt.xlim(-20,220)
-		plt.xlabel('x (mm)')
-		plt.ylabel('y (mm)')
+		plt.xlabel('Position in Respective Plane (mm)')
+		plt.ylabel('Z (mm)')
+		#ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='medium')
+		plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='medium')
+		plt.title("Tracker Event Geometry")
 # 		plt.show()
+# 		plt.draw()
+
+def testPlot():
+#used to test figure layout
+
+	pitch = 0.228						 #pitch of the detector
+	middlefirststrip = 0.035
+	gapwidth = 0.075
+	detectoredge = 1.088				#distance between the middle of the last strip and the edge of the detector
+	middlefirststripchip6 = 87.359 + gapwidth + 2*detectoredge
+	
+	y= [212,192,126,60,40,20,0]
+
+	xList = [0]*7
+	for lyr in range(7): xList[lyr]= []
+	numberOfChips= [0]*7
+#Convert the location of the hits to coordinates in mm, differentiate between the first 6 chips and that last 6 to account for the gap in between the detectors 
+	nLyrHit = 0
+	xpltNonBend = []
+	ypltNonBend = []
+	xpltBend = []
+	ypltBend = []
+	
+	for lidx in range(7) :
+		i = lidx * 100
+		if lidx in [0,4,6] :
+			
+			if 0 <= i < 384:
+				x = round((middlefirststrip+((i-0.5)*pitch)), 3)
+				xList[lidx].append(x)
+				xpltNonBend.append(x)
+				ypltNonBend.append(y[lidx])
+			else: 
+				x= round((middlefirststripchip6+((i-384.5)*pitch)), 3)
+				xList[lidx].append(x)
+				xpltNonBend.append(x)
+				ypltNonBend.append(y[lidx])
+		else :
+			
+			if 0 <= i < 384:
+				x = round((middlefirststrip+((i-0.5)*pitch)), 3)
+				xList[lidx].append(x)
+				xpltBend.append(x)
+				ypltBend.append(y[lidx])
+			else: 
+				x= round((middlefirststripchip6+((i-384.5)*pitch)), 3)
+				xList[lidx].append(x)
+				xpltBend.append(x)
+				ypltBend.append(y[lidx])
+
+	fig = plt.figure()
+	ax = fig.add_axes([0.1, 0.1, 0.6, 0.85])
+	ax.plot(xpltNonBend,ypltNonBend,linestyle='none',marker='o',label="NonBending Plane")
+	ax.plot(xpltBend,ypltBend,linestyle='none',marker='o', color='red',label="Bending Plane")
+	topMag = patches.Rectangle([0,134], 200, 50, color='grey')
+	botMag = patches.Rectangle([0,68], 200, 50, color='grey')
+	ax.add_patch(topMag)
+	ax.add_patch(botMag)
+	plt.ylim(-50,250)
+	plt.xlim(-20,220)
+	plt.xlabel('Position in Respective Plane (mm)')
+	plt.ylabel('Z (mm)')
+	ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='medium')
+	plt.title("Tracker Event Geometry")
+	plt.show()
 # 		plt.draw()
 	
 def surveyTrg():	
 # 	Survey and graph all possible combinations of trig delay and window
 # 	global countEvents
-# 	global countClusters
-# 	global EventNum
+# 	global countChips
+# 	global eventNum
 	global newEventVar
 	global waitNewEventTask
 # 	global bufSpeed, fpgaTrgDly
@@ -520,35 +667,35 @@ def surveyTrg():
 					enableTrigger()
 		# 			setTrg()
 		# 			trackerEventNum = getTriggerCount(0)
-		# 			while (trackerEventNum == EventNum): 
+		# 			while (trackerEventNum == eventNum): 
 		# 				trackerEventNum = getTriggerCount(0)
 					#todo need to wait variable on a new event function
 					newEventVar.set(False)
 					waitNewEventTask = rootTk.after(1, waitNewEvent)
 					rootTk.wait_variable(newEventVar)
 					getEvent(False) # clear an event before starting measurement
-		# 			EventNum = trackerEventNum
+		# 			eventNum = trackerEventNum
 					lastCountEvents = countEvents
-					lastCountClusters = countClusters
-					logging.info("countEvents = %d countClusters = %d", countEvents, countClusters)
+					lastCountClusters = countChips
+					logging.info("countEvents = %d countChips = %d", countEvents, countChips)
 					iterEvents = 0
 					while (iterEvents < sampleEvents):
 						surveyTrgIterVar.set(str(iterEvents))
-		# 				while (trackerEventNum == EventNum): 
+		# 				while (trackerEventNum == eventNum): 
 		# 					trackerEventNum = getTriggerCount(0)
 						newEventVar.set(False)
 						waitNewEventTask = rootTk.after(1, waitNewEvent)
 						rootTk.wait_variable(newEventVar)
 						getEvent(False)
-		# 				EventNum = trackerEventNum
+		# 				eventNum = trackerEventNum
 						iterEvents += 1
 					if (lastCountEvents == countEvents):
 # 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = 0.0
 						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = 0.0
 
 					else:
-# 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = float(countClusters - lastCountClusters) / float(countEvents - lastCountEvents)
-						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = float(countClusters - lastCountClusters) / float(countEvents - lastCountEvents)
+# 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = float(countChips - lastCountClusters) / float(countEvents - lastCountEvents)
+						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = float(countChips - lastCountClusters) / float(countEvents - lastCountEvents)
 						logging.info("eventMetrics[ %d , %d , %d , %d ] = %f", idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly, eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly])
 		
 					disableTrigger()
@@ -592,8 +739,8 @@ def surveyTrg():
 def surveyTest():	
 # 	Survey and graph all possible combinations of trig delay and window
 # 	global countEvents
-# 	global countClusters
-# 	global EventNum
+# 	global countChips
+# 	global eventNum
 	global newEventVar
 	global waitNewEventTask
 # 	global bufSpeed, fpgaTrgDly
@@ -714,11 +861,19 @@ fileLevel=logging.DEBUG
 consoleLevel=logging.INFO
 setupLogging(logFileName,fileLevel,consoleLevel)
 
+csvFileName = "AESOP_FirstStrips.csv"
+print "Opening csv First Strips data file under name ",csvFileName
+csvFile = open(csvFileName, 'w')
+csvW = csv.writer(csvFile)
+csvW.writerow(["Timestamp", "Event Number", "Board Address", "FirstStrips List"])
+
+countTrackerChips = [0, 0, 0, 0, 0, 0, 0, 0]
+
 logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.14")
+rootTk.title("Tracker Config V0.16")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 # Tk()
@@ -738,9 +893,12 @@ Grid.columnconfigure(frameAL, 0, weight=1)
 
 comSpin = Spinbox(frameAL, from_=1, to=20, width=2)
 comBut = Button(frameAL, text="COM", command=setCOM)
+comCloseBut = Button(frameAL, text="COM Close (after power cycle)", command=closeCOM)
 boardsSpin = Spinbox(frameAL, from_=1, to=7, width=1)
 boardsBut = Button(frameAL, text="Boards", command=setBoards)
 resetBut = Button(frameAL, text="Reset Boards", command=resetBoards)
+asicOffBut = Button(frameAL, text="ASIC Power Off", command=asicOff)
+
 configTDLbl = Label(frameAL, text="Trig Delay")
 configTDSpin = Spinbox(frameAL, from_=0, to=31, width=2) #5 bits of trigger delay in register
 configBut = Button(frameAL, text="Config Boards", command=configBoards)
@@ -748,6 +906,8 @@ configTWVar = IntVar()
 configTWChk = Checkbutton(frameAL, text="Trig Win=1", variable=configTWVar)
 configBSLbl = Label(frameAL, text="Buf Speed")
 configBSSpin = Spinbox(frameAL, from_=0, to=7, width=1) #3 bits
+configFDLbl = Label(frameAL, text="FPGA Delay")
+configFDSpin = Spinbox(frameAL, from_=0, to=255, width=3) #5 bits of trigger delay in register
 trgBut = Button(frameAL, text="Trigger", command=setTrg)
 trgMenuLbl = Label(frameAL, text="Source")
 trgVar = StringVar()
@@ -791,6 +951,15 @@ missedTLbl = Label(frameAL, textvariable=missedTVar)
 enableTBut = Button(frameAL, text="Enable Trig", command=enableTrigger)
 disableTBut = Button(frameAL, text="Disable Trig", command=disableTrigger)
 
+eventNumVar = StringVar()
+eventNumVar.set("Event Num:    0")
+eventNumLbl = Label(frameAL, textvariable=eventNumVar)
+countChipsVar = StringVar()
+countChipsVar.set("Total Chip Hits:    0")
+countChipsLbl = Label(frameAL, textvariable=countChipsVar)
+countTrackerChipsVar = StringVar()
+countTrackerChipsVar.set("Chip Hits per Board: " + str(countTrackerChips))
+countTrackerChipLbl = Label(frameAL, textvariable=countTrackerChipsVar)
 
 
 # quitBut = Button(frameAL, text="QUIT", fg= "red", command=quitCmd)
@@ -799,6 +968,7 @@ currentRow = 0
 
 comBut.grid(row=currentRow, column=0)
 comSpin.grid(row=currentRow, column=1)
+comCloseBut.grid(row=currentRow, column=2)
 
 currentRow += 1
 boardsBut.grid(row=currentRow, column=0)
@@ -807,13 +977,17 @@ boardsSpin.grid(row=currentRow, column=1)
 currentRow += 1
 resetBut.grid(row=currentRow, column=0)
 configTDLbl.grid(row=currentRow, column=1)
+asicOffBut.grid(row=currentRow, column=2)
 configBSLbl.grid(row=currentRow, column=3)
+configFDLbl.grid(row=currentRow, column=4)
 
 currentRow += 1
 configBut.grid(row=currentRow, column=0)
 configTDSpin.grid(row=currentRow, column=1)
 configTWChk.grid(row=currentRow, column=2)
 configBSSpin.grid(row=currentRow, column=3)
+configFDSpin.grid(row=currentRow, column=4)
+
 
 currentRow += 1
 trgMenuLbl.grid(row=currentRow, column=1)
@@ -852,6 +1026,14 @@ missedTBut.grid(row=currentRow, column=0)
 missedTLbl.grid(row=currentRow, column=1)
 enableTBut.grid(row=currentRow, column=2)
 disableTBut.grid(row=currentRow, column=3)
+
+currentRow += 1
+
+eventNumLbl.grid(row=currentRow, column=0)
+countChipsLbl.grid(row=currentRow, column=1)
+countTrackerChipLbl.grid(row=currentRow, column=2)
+
+# testPlot()
 
 # quitBut.grid(row=10, column=0)
 

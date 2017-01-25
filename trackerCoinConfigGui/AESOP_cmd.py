@@ -75,6 +75,10 @@ def openCOM(portName):
   global ser
   ser = serial.Serial(portName, 115200, timeout=.2)
   
+def closeCOM():
+  global ser
+  ser.close()
+  
 def sendByte(hexbyte):
   ser.write(hexbyte)
 #  logging.debug(binascii.hexlify(hexbyte)) #hex(hexbyte)
@@ -344,6 +348,12 @@ def getCodeVersion(Address):
   if (Address < 7):
     hexStr = "0%x" % Address
     send([binascii.unhexlify(hexStr),"\x0a","\x00"])
+    return readReg()
+
+def getBoardID(Address):
+  if (Address < 7):
+    hexStr = "0%x" % Address
+    send([binascii.unhexlify(hexStr),"\x73","\x00"])
     return readReg()
   
 def resetFPGAconfig(Address):

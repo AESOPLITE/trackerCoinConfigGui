@@ -37,9 +37,9 @@ from numpy.matlib import rand
 #V0.12	12/14/16 Changed some of the task scheduling 
 #V0.13	12/19/16 Changed to interactive mode for plotting events
 #V0.14	12/22/16 Survey series changed from Trig Delay var to FPGA Delay
-#V0.15	01/09/16 Added FPGA buf spinbox
-#V0.16	01/17/16 Added many things to for full board integration. CSV even data file, Clear plot each event, Tracker Geometry with diff series for bending plane, ASIC power off button, new labels
-
+#V0.15	01/09/17 Added FPGA buf spinbox
+#V0.16	01/17/17 Added many things to for full board integration. CSV even data file, Clear plot each event, Tracker Geometry with diff series for bending plane, ASIC power off button, new labels
+#V0.17	01/25/17 Added mask for internal trig.  Upgraded AESOP_cmd to merge in changes and add closeCOM(). readTriggerNotice() doesn't work yet so still polling on internal triggers
 
 #
 #TODO coin rate 40hz set poll rate accordingly
@@ -60,9 +60,8 @@ def setCOM():
 	logging.info("Opening COM channel %s for UART communication with the master board via USB." % comChannel)
 	openCOM(comChannel)
 	
-def closeCOM():
-	global ser
-	ser.close()
+def endCOM():
+	closeCOM()
 	logging.info("Closed COM channel")
 
 def setBoards():
@@ -221,6 +220,8 @@ def resetBoards():
 	
 	
 # 	triggerSetup(0,0,1)
+
+
 	logging.info("The number of register load/read errors= %d",nError)
 	
 def asicOff():
@@ -266,6 +267,7 @@ def configTrgReg(bufSpeed, trgDly, trgWin):
 	logging.info("The number of register load/read errors= %d",nError)
 	
 def setTrg():
+	global trgNoticeVar
 # 	trigStr = trgMenu.get()
 	trgKey = trgList.get(trgVar.get(), -1)
 	logging.info("trigvar %s %s", trgVar.get(), trgKey)
@@ -277,6 +279,14 @@ def setTrg():
 			triggerWidth = int(configIntTWSpin.get())
 			logging.info("Setting int trigger %d, %d", triggerDelay,triggerWidth)
 			intTriggerSetup(7,triggerDelay,triggerWidth)
+			for board in Boards:
+				logging.info("Setting int Mask %d, %d", board,intTrgMaskVar[board].get())
+				setTriggerMask(board,intTrgMaskVar[board].get())
+				intTriggerType(board,'and')
+#			trgNoticeVar.set(True)
+			trgNoticeVar.set(False) #TODO once readTriggerNotice() works set to true
+		else :
+			trgNoticeVar.set(False)
 
 		
 def pollEnableChkCmd():
@@ -381,22 +391,28 @@ def waitNewEvent():
 	if newEventVar.get() :
 		logging.info("New Event variable not set %r", newEventVar)
 	else :
-# 		if readTriggerNotice() == True :
-# 			newEventVar.set(True)
-		trackerEventNum = getTriggerCount(0)
-		if (eventNum != trackerEventNum) :
-			logging.debug("eventNum = %r trackerEventNum = %r", eventNum, trackerEventNum)
-	#		trackerEventNumHex = (trackerEventNum[2])[2:3] + (trackerEventNum[3])[2:3]
-# 			trackerEventNumHex = trackerEventNum[3]
-# 			trackerEventNum2Byte = 256 * int(binascii.hexlify(trackerEventNum[2]),16) + int(binascii.hexlify(trackerEventNum[3]),16)
-# 			if (trackerEventNum2Byte != eventNum):
-			eventNum = trackerEventNum
-			newEventVar.set(True)
-# 			else :
-# 				waitNewEventTask = rootTk.after(20, waitNewEvent)
+		if trgNoticeVar.get() :
+			if readTriggerNotice() == True :
+				logging.info("Notice Trig")
+				newEventVar.set(True)
+			else :
+				logging.info("Schedule New task")
+				waitNewEventTask = rootTk.after(1, waitNewEvent)
 		else :
-# 			logging.info("Schedule New task")
-			waitNewEventTask = rootTk.after(20, waitNewEvent)
+			trackerEventNum = getTriggerCount(0)
+			if (eventNum != trackerEventNum) :
+				logging.debug("eventNum = %r trackerEventNum = %r", eventNum, trackerEventNum)
+		#		trackerEventNumHex = (trackerEventNum[2])[2:3] + (trackerEventNum[3])[2:3]
+	# 			trackerEventNumHex = trackerEventNum[3]
+	# 			trackerEventNum2Byte = 256 * int(binascii.hexlify(trackerEventNum[2]),16) + int(binascii.hexlify(trackerEventNum[3]),16)
+	# 			if (trackerEventNum2Byte != eventNum):
+				eventNum = trackerEventNum
+				newEventVar.set(True)
+	# 			else :
+	# 				waitNewEventTask = rootTk.after(20, waitNewEvent)
+			else :
+	# 			logging.info("Schedule New task")
+				waitNewEventTask = rootTk.after(20, waitNewEvent)
 
 
 def getMissedTrg():
@@ -867,15 +883,17 @@ csvFile = open(csvFileName, 'w')
 csvW = csv.writer(csvFile)
 csvW.writerow(["Timestamp", "Event Number", "Board Address", "FirstStrips List"])
 
-countTrackerChips = [0, 0, 0, 0, 0, 0, 0, 0]
+countTrackerChips = [0] * 7
 
 logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.16")
+rootTk.title("Tracker Config V0.17")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
+trgNoticeVar = Tkinter.BooleanVar()
+trgNoticeVar.set(False)
 # Tk()
 frameAL=Frame(rootTk)
 # frameAL=Frame()
@@ -893,7 +911,7 @@ Grid.columnconfigure(frameAL, 0, weight=1)
 
 comSpin = Spinbox(frameAL, from_=1, to=20, width=2)
 comBut = Button(frameAL, text="COM", command=setCOM)
-comCloseBut = Button(frameAL, text="COM Close (after power cycle)", command=closeCOM)
+comCloseBut = Button(frameAL, text="COM Close (after power cycle)", command=endCOM)
 boardsSpin = Spinbox(frameAL, from_=1, to=7, width=1)
 boardsBut = Button(frameAL, text="Boards", command=setBoards)
 resetBut = Button(frameAL, text="Reset Boards", command=resetBoards)
@@ -916,6 +934,13 @@ configIntTDSpin = Spinbox(frameAL, from_=0, to=255, width=3)
 configIntTDSpinLbl = Label(frameAL, text="Int Delay")
 configIntTWSpin = Spinbox(frameAL, from_=0, to=255, width=3)
 configIntTWSpinLbl = Label(frameAL, text="Int Width")
+
+intTrgMaskVar = [0]*7
+intTrgMaskBox = [0]*7
+for i in range(7) :
+	intTrgMaskVar[i] = IntVar()
+	intTrgMaskBox[i] = Checkbutton(frameAL, text="Mask " + str(i), variable=intTrgMaskVar[i])
+
 eventPollingEnable = IntVar()
 pollEnableChk = Checkbutton(frameAL, text="Poll Events", variable=eventPollingEnable, command=pollEnableChkCmd)
 eventPlotEnable = IntVar()
@@ -999,6 +1024,8 @@ trgBut.grid(row=currentRow, column=0)
 trgMenu.grid(row=currentRow, column=1)
 configIntTDSpin.grid(row=currentRow, column=2)
 configIntTWSpin.grid(row=currentRow, column=3)
+for i in range(7) : 
+	intTrgMaskBox[i].grid(row=currentRow, column=4+i)
 
 currentRow += 1
 pollEnableChk.grid(row=currentRow, column=0)
@@ -1039,4 +1066,6 @@ countTrackerChipLbl.grid(row=currentRow, column=2)
 
 # rootTk.after(1000, eventPolling)
 rootTk.mainloop()
+
+#TODO add current monitor button
 

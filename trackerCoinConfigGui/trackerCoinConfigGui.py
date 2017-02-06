@@ -40,6 +40,7 @@ from numpy.matlib import rand
 #V0.15	01/09/17 Added FPGA buf spinbox
 #V0.16	01/17/17 Added many things to for full board integration. CSV even data file, Clear plot each event, Tracker Geometry with diff series for bending plane, ASIC power off button, new labels
 #V0.17	01/25/17 Added mask for internal trig.  Upgraded AESOP_cmd to merge in changes and add closeCOM(). readTriggerNotice() doesn't work yet so still polling on internal triggers
+#V0.18	01/25/17 Fixed some issues with internal trigger, adding a force button in case of missed notification.
 
 #
 #TODO coin rate 40hz set poll rate accordingly
@@ -242,7 +243,7 @@ def configTrgReg(bufSpeed, trgDly, trgWin):
 # 	global bufSpeed
 # 	Address = 0
 	Polarity = 0
-	oneShot = 1
+	oneShot = 0
 	Gain = 0
 	shapingTime = 1
 # 	bufSpeed = 3
@@ -280,11 +281,30 @@ def setTrg():
 			logging.info("Setting int trigger %d, %d", triggerDelay,triggerWidth)
 			intTriggerSetup(7,triggerDelay,triggerWidth)
 			for board in Boards:
-				logging.info("Setting int Mask %d, %d", board,intTrgMaskVar[board].get())
-				setTriggerMask(board,intTrgMaskVar[board].get())
+				intTrgMaskVarVal = intTrgMaskVar[board].get()
+				logging.info("Setting int Mask %d, %d", board,intTrgMaskVarVal)
+				setTriggerMask(board,intTrgMaskVarVal)
 				intTriggerType(board,'and')
-#			trgNoticeVar.set(True)
-			trgNoticeVar.set(False) #TODO once readTriggerNotice() works set to true
+				
+				Range = 0
+				Value = 22
+				if intTrgMaskVarVal :
+					Value = 28
+				for chip in range(12):
+					logging.info("Set the ASIC threshold DAC for chip %d of board %d to %d" % (chip,board,Value))
+					loadThrDAC(board,chip,Range,Value)
+					logging.info("Read the ASIC threshold DAC for chip %d",chip)
+					response = readThrDAC(board,chip)
+					logging.info("DAC register read response=%s",response)
+					if int(response[0],2) != Range: 
+						logging.error('    Wrong range returned by chip %d for the threshold DAC setting',chip)
+						#nError = nError + 1
+					intResponse= int(response[1:8],2)
+					if intResponse != Value: 
+						logging.error('    Wrong value returned by chip %d for the threshold DAC setting',chip)  
+						#nError = nError + 1
+			trgNoticeVar.set(True)
+# 			trgNoticeVar.set(False) #TODO once readTriggerNotice() works set to true
 		else :
 			trgNoticeVar.set(False)
 
@@ -413,8 +433,19 @@ def waitNewEvent():
 			else :
 	# 			logging.info("Schedule New task")
 				waitNewEventTask = rootTk.after(20, waitNewEvent)
+				
+				
+def eventCancelWaitTask():
 
+	global newEventVar
+	global waitNewEventTask
+	
 
+	newEventVar.set(True)
+	if 'waitNewEventTask' in globals():
+		rootTk.after_cancel(waitNewEventTask)
+				
+				
 def getMissedTrg():
 	global missedTVar
 	missedTrgNum = getMissedTriggerCount(0)
@@ -889,7 +920,7 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.17")
+rootTk.title("Tracker Config V0.18")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 trgNoticeVar = Tkinter.BooleanVar()
@@ -945,6 +976,7 @@ eventPollingEnable = IntVar()
 pollEnableChk = Checkbutton(frameAL, text="Poll Events", variable=eventPollingEnable, command=pollEnableChkCmd)
 eventPlotEnable = IntVar()
 plotEnableChk = Checkbutton(frameAL, text="Plot Events", variable=eventPlotEnable, command=plotEnableChkCmd)
+eventCancelWaitBut = Button(frameAL, text="Cancel Event Wait", command=eventCancelWaitTask)
 surveyTrgIterVar = StringVar()
 surveyTrgIterLbl = Label(frameAL, textvariable=surveyTrgIterVar)
 surveyTrgDlyVar = StringVar()
@@ -1032,6 +1064,7 @@ pollEnableChk.grid(row=currentRow, column=0)
 plotEnableChk.grid(row=currentRow, column=1)
 surveyTrgIterLbl.grid(row=currentRow, column=2)
 surveyTrgDlyLbl.grid(row=currentRow, column=3)
+eventCancelWaitBut.grid(row=currentRow, column=4)
 surveyTrgWinLbl.grid(row=currentRow, column=5)
 surveyBufSpdLbl.grid(row=currentRow, column=7)
 surveyFpgaTrgDlyLbl.grid(row=currentRow, column=9)

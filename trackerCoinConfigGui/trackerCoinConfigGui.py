@@ -41,13 +41,14 @@ from numpy.matlib import rand
 #V0.16	01/17/17 Added many things to for full board integration. CSV even data file, Clear plot each event, Tracker Geometry with diff series for bending plane, ASIC power off button, new labels
 #V0.17	01/25/17 Added mask for internal trig.  Upgraded AESOP_cmd to merge in changes and add closeCOM(). readTriggerNotice() doesn't work yet so still polling on internal triggers
 #V0.18	01/25/17 Fixed some issues with internal trigger, adding a force button in case of missed notification.
+#V0.19	02/13/17 Improvements for new int wait trigger.  Works intermittently looking at serial stream issues in AESOP_cmd.
 
 #
 #TODO coin rate 40hz set poll rate accordingly
 
 #Globals
 Boards =[]
-trgList = dict({'0 ext' : 0, '1 ext & int' : 1, '2 ext or int' : 2, '3 int' : 3})
+trgList = dict({'0 ext' : 0, '1 ext & int' : 1, '2 ext or int' : 2, '3 int' : 3, '4 int wait' : 4})
 nError = 0
 eventNum = 0
 countEvents = 0
@@ -269,6 +270,7 @@ def configTrgReg(bufSpeed, trgDly, trgWin):
 	
 def setTrg():
 	global trgNoticeVar
+	global trgEventWaitVar
 # 	trigStr = trgMenu.get()
 	trgKey = trgList.get(trgVar.get(), -1)
 	logging.info("trigvar %s %s", trgVar.get(), trgKey)
@@ -303,10 +305,16 @@ def setTrg():
 					if intResponse != Value: 
 						logging.error('    Wrong value returned by chip %d for the threshold DAC setting',chip)  
 						#nError = nError + 1
-			trgNoticeVar.set(True)
-# 			trgNoticeVar.set(False) #TODO once readTriggerNotice() works set to true
+			if trgKey == 4 :
+				setGoClockCycles(trigWaitScl.get())
+				trgNoticeVar.set(False)
+				trgEventWaitVar.set(True)
+			else :
+				trgNoticeVar.set(True)
+				trgEventWaitVar.set(False)
 		else :
 			trgNoticeVar.set(False)
+			trgEventWaitVar.set(False)
 
 		
 def pollEnableChkCmd():
@@ -413,11 +421,17 @@ def waitNewEvent():
 	else :
 		if trgNoticeVar.get() :
 			if readTriggerNotice() == True :
-				logging.info("Notice Trig")
+# 				logging.info("Notice Trig")
 				newEventVar.set(True)
 			else :
-				logging.info("Schedule New task")
+				#logging.info("Schedule New task")
 				waitNewEventTask = rootTk.after(1, waitNewEvent)
+		elif trgEventWaitVar.get() :
+			if readEventWait():
+				newEventVar.set(True)
+			else :
+# 				logging.info("Schedule New task")
+				waitNewEventTask = rootTk.after(20, waitNewEvent)
 		else :
 			trackerEventNum = getTriggerCount(0)
 			if (eventNum != trackerEventNum) :
@@ -452,6 +466,17 @@ def getMissedTrg():
 	if len(missedTrgNum) > 2 :
 		logging.debug("missedTrgNum = %r", missedTrgNum)
 		missedTVar.set("Missed Triggers: " + str( int(binascii.hexlify(missedTrgNum[2]),16)))
+
+def getMissedGo():
+	global missedGoVar
+	missedGoNum = getMissedGoCount()
+	if len(missedGoNum) > 2 :
+		logging.debug("missedTrgGo = %r", missedGoNum)
+		missedGoVar.set("Missed GO: " + str( int(binascii.hexlify(missedGoNum[2]),16)))
+		
+def getASICDiag():
+	getTriggersASIC()
+	getASICBufferOverflows()
 	
 def getEvent(showPlot):
 	#get a tracker event and plot it if showPlot is true
@@ -920,11 +945,15 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.18")
+rootTk.title("Tracker Config V0.19")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 trgNoticeVar = Tkinter.BooleanVar()
 trgNoticeVar.set(False)
+trgNoticeVar = Tkinter.BooleanVar()
+trgNoticeVar.set(False)
+trgEventWaitVar = Tkinter.BooleanVar()
+trgEventWaitVar.set(False)
 # Tk()
 frameAL=Frame(rootTk)
 # frameAL=Frame()
@@ -971,6 +1000,7 @@ intTrgMaskBox = [0]*7
 for i in range(7) :
 	intTrgMaskVar[i] = IntVar()
 	intTrgMaskBox[i] = Checkbutton(frameAL, text="Mask " + str(i), variable=intTrgMaskVar[i])
+trigWaitScl = surveyTrgIterScl = Scale(frameAL, from_=0, to=255, orient=HORIZONTAL, label="GO wait cycles")
 
 eventPollingEnable = IntVar()
 pollEnableChk = Checkbutton(frameAL, text="Poll Events", variable=eventPollingEnable, command=pollEnableChkCmd)
@@ -1005,8 +1035,13 @@ missedTBut = Button(frameAL, text="Get Missed", command=getMissedTrg)
 missedTVar = StringVar()
 missedTVar.set("Missed Triggers:    0")
 missedTLbl = Label(frameAL, textvariable=missedTVar)
+missedGoBut = Button(frameAL, text="Get Missed GO", command=getMissedGo)
+missedGoVar = StringVar()
+missedGoVar.set("Missed GO:    0")
+missedGoLbl = Label(frameAL, textvariable=missedGoVar)
 enableTBut = Button(frameAL, text="Enable Trig", command=enableTrigger)
 disableTBut = Button(frameAL, text="Disable Trig", command=disableTrigger)
+diagASICBut = Button(frameAL, text="Get ASIC Diag", command=getASICDiag)
 
 eventNumVar = StringVar()
 eventNumVar.set("Event Num:    0")
@@ -1058,6 +1093,7 @@ configIntTDSpin.grid(row=currentRow, column=2)
 configIntTWSpin.grid(row=currentRow, column=3)
 for i in range(7) : 
 	intTrgMaskBox[i].grid(row=currentRow, column=4+i)
+trigWaitScl.grid(row=currentRow, column=11)
 
 currentRow += 1
 pollEnableChk.grid(row=currentRow, column=0)
@@ -1086,6 +1122,9 @@ missedTBut.grid(row=currentRow, column=0)
 missedTLbl.grid(row=currentRow, column=1)
 enableTBut.grid(row=currentRow, column=2)
 disableTBut.grid(row=currentRow, column=3)
+missedGoBut.grid(row=currentRow, column=4)
+missedGoLbl.grid(row=currentRow, column=5)
+diagASICBut.grid(row=currentRow, column=6)
 
 currentRow += 1
 

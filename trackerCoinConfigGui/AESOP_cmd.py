@@ -292,6 +292,21 @@ def readTriggerNotice():
     if strByte == '0b10101011': trig = True
   logging.debug(' readTriggerNotice returning %d',trig)
   return trig
+
+def readEventWait():
+  logging.debug(' Entering readEventWait')
+  send(["\x00","\x57","\x00"])
+  length = getRegDumpLength()
+  event = False
+  for nByte in range(length) :
+    Byte = ser.read()
+    if (6 == nByte) : #The response data byte
+      intByte = int(binascii.hexlify(Byte),16)
+      strByte = bin(intByte)
+      logging.debug(' readEventWait Byte= ' + strByte)
+      if strByte == '0b1011001': event = True # ASCII 'Y' indicates event waiting
+  logging.debug(' readEventWait returning %d',event)
+  return event
   
 def readTriggerOutput():
   length = getEvtDumpLength()
@@ -453,6 +468,13 @@ def setTriggerSource(source):
   send(["\x07","\x64","\x01",binascii.unhexlify(hexNum)])
   return readReg()
 
+def setGoClockCycles(cycles):
+  logging.info("Setting the GO clock cycles to %d",cycles)
+  if cycles>15: hexNum = "%x" % cycles
+  else: hexNum = "0%x" % cycles
+  send(["\x00","\x56","\x01",binascii.unhexlify(hexNum)])
+  return readReg()
+
 def enableTrigger():
   send(["\x07","\x65","\x00"])
   if readReg()[1] == "ab":
@@ -493,6 +515,18 @@ def getMissedTriggerCount(Address):
     hexAdr = '0%x' % Address
     send([binascii.unhexlify(hexAdr),"\x75","\x00"])
     return readReg()
+
+def getMissedGoCount():
+  send(["\x00","\x58","\x00"])
+  return readReg()
+
+def getTriggersASIC():
+  send(["\x00","\x54","\x00"])
+  return readReg()
+
+def getASICBufferOverflows():
+  send(["\x00","\x55","\x00"])
+  return readReg()
 
 def getErrorCount(Address,Code):
   if (Address < 7):

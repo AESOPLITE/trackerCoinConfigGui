@@ -468,11 +468,29 @@ def setTriggerSource(source):
   send(["\x07","\x64","\x01",binascii.unhexlify(hexNum)])
   return readReg()
 
+def setTriggerEndLayer(Address,Value):
+  logging.info("Setting the trigger end layer for board %d to %d" % (Address,Value))
+  hexAddr = "0%x" % Address
+  hexVal = "0%x" % Value
+  send([binascii.unhexlify(hexAddr),"\x5A","\x01",binascii.unhexlify(hexVal)])
+  return readReg()
+  
 def setGoClockCycles(cycles):
   logging.info("Setting the GO clock cycles to %d",cycles)
   if cycles>15: hexNum = "%x" % cycles
   else: hexNum = "0%x" % cycles
   send(["\x00","\x56","\x01",binascii.unhexlify(hexNum)])
+  return readReg()
+
+def setDualTriggers(Value):
+  logging.info("Setting the redundant trigger chain to %d",Value)
+  hexVal = "0%x" % Value
+  send(["\x00","\x5b","\x01",binascii.unhexlify(hexVal)])
+  return readReg()
+
+def getGoClockCycles():
+  logging.info("Reading the GO clock cycles.")
+  send(["\x00","\x59","\x00"])
   return readReg()
 
 def enableTrigger():
@@ -612,7 +630,7 @@ def ReadTkrEvent(tag,cal,verbose):
   if verbose: logging.info('  Event number %d',EvtNum)  
   cmdCount = int(binascii.hexlify(response[3]),16)
   if verbose: logging.info('  Command count= %d',cmdCount)
-  nDataPacks = int(binascii.hexlify(response[4]),16)
+  nDataPacks = int(binascii.hexlify(response[4]),16) % 8
   if verbose: logging.info('  Expecting %d data packets...',nDataPacks)
   if nDataPacks > 7:
     logging.error('  Too many data packets specified:  n=%d',nDataPacks)

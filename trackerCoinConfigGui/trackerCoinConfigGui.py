@@ -42,6 +42,7 @@ from numpy.matlib import rand
 #V0.17	01/25/17 Added mask for internal trig.  Upgraded AESOP_cmd to merge in changes and add closeCOM(). readTriggerNotice() doesn't work yet so still polling on internal triggers
 #V0.18	01/25/17 Fixed some issues with internal trigger, adding a force button in case of missed notification.
 #V0.19	02/13/17 Improvements for new int wait trigger.  Works intermittently looking at serial stream issues in AESOP_cmd.
+#V0.20	03/01/17 Improvements for new int wait trigger including single nonbend trig plane w/ AESOP_cmd changes.  Survey changed for external only to use the trigger settings on GUI
 
 #
 #TODO coin rate 40hz set poll rate accordingly
@@ -282,11 +283,25 @@ def setTrg():
 			triggerWidth = int(configIntTWSpin.get())
 			logging.info("Setting int trigger %d, %d", triggerDelay,triggerWidth)
 			intTriggerSetup(7,triggerDelay,triggerWidth)
+			endBoards = []
+			tempBoard = trgNonBendEndVar.get()
+			if tempBoard != "":
+				endBoards.append(int(tempBoard))
+			if intTrgDualVar.get() :
+				tempBoard = trgBendEndVar.get()
+				if tempBoard != "":
+					endBoards.append(int(tempBoard))
 			for board in Boards:
 				intTrgMaskVarVal = intTrgMaskVar[board].get()
+
 				logging.info("Setting int Mask %d, %d", board,intTrgMaskVarVal)
-				setTriggerMask(board,intTrgMaskVarVal)
 				intTriggerType(board,'and')
+				setTriggerMask(board,intTrgMaskVarVal)
+				
+				if i in endBoards :
+					setTriggerEndLayer(i,1)
+				else :
+					setTriggerEndLayer(i,0)
 				
 				Range = 0
 				Value = 22
@@ -306,7 +321,9 @@ def setTrg():
 						logging.error('    Wrong value returned by chip %d for the threshold DAC setting',chip)  
 						#nError = nError + 1
 			if trgKey == 4 :
+				setDualTriggers(intTrgDualVar.get())
 				setGoClockCycles(trigWaitScl.get())
+				getGoClockCycles()
 				trgNoticeVar.set(False)
 				trgEventWaitVar.set(True)
 			else :
@@ -386,9 +403,10 @@ def eventPolling():
 # 		logging.info("trackerEventNum = %r", trackerEventNum)
 # 	getEvent(eventPlotEnable.get())
 	if (eventPollingEnable.get()):
+		getEvent(eventPlotEnable.get())
 		eventPollingTask = rootTk.after(20, eventPolling)
 		
-	getEvent(eventPlotEnable.get())
+	
 
 # 	else: 
 # 		logging.info("Disable Trigger")
@@ -480,8 +498,7 @@ def getASICDiag():
 	
 def getEvent(showPlot):
 	#get a tracker event and plot it if showPlot is true
-	#TODO add per board counters and printout on labels
-	#TODO Add separate csv file for event data format smeting like timestamp, event#, board#, strip data...
+	
 	global countEvents
 	global countChips
 	global countTrackerChips
@@ -735,7 +752,8 @@ def surveyTrg():
 					resetBoards() # Full reset seems needed
 					configTrgReg(idxBufSpd, idxTrgDly, idxTrgWin)
 					triggerSetup(0,idxFpgaTrgDly,1)
-					setTriggerSource(0) # TODO allow int trigger too
+					#setTriggerSource(0) 
+					setTrg() #use exiting trigger options, must be set before survey starts
 					enableTrigger()
 		# 			setTrg()
 		# 			trackerEventNum = getTriggerCount(0)
@@ -945,7 +963,7 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.19")
+rootTk.title("Tracker Config V0.20")
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 trgNoticeVar = Tkinter.BooleanVar()
@@ -998,9 +1016,22 @@ configIntTWSpinLbl = Label(frameAL, text="Int Width")
 intTrgMaskVar = [0]*7
 intTrgMaskBox = [0]*7
 for i in range(7) :
+	color = "red"
+	if i in [0, 4, 6] :
+		color = "blue"
 	intTrgMaskVar[i] = IntVar()
-	intTrgMaskBox[i] = Checkbutton(frameAL, text="Mask " + str(i), variable=intTrgMaskVar[i])
+	intTrgMaskBox[i] = Checkbutton(frameAL, text="Mask " + str(i), variable=intTrgMaskVar[i], bg = color)
+	intTrgMaskVar[i].set(True)
+trgNonBendEndLbl = Label(frameAL, text="NonBending End =")
+trgNonBendEndVar = StringVar()
+trgNonBendEndMenu = OptionMenu(frameAL,trgNonBendEndVar, 4,6)
+trgBendEndLbl = Label(frameAL, text="Bending End =")
+trgBendEndVar = StringVar()
+trgBendEndMenu = OptionMenu(frameAL,trgBendEndVar, 1,2,3,5)
 trigWaitScl = surveyTrgIterScl = Scale(frameAL, from_=0, to=255, orient=HORIZONTAL, label="GO wait cycles")
+intTrgDualVar = IntVar()
+intTrgDualBox = Checkbutton(frameAL, text="Dual Trig", variable=intTrgDualVar)
+intTrgDualVar.set(True)
 
 eventPollingEnable = IntVar()
 pollEnableChk = Checkbutton(frameAL, text="Poll Events", variable=eventPollingEnable, command=pollEnableChkCmd)
@@ -1085,15 +1116,21 @@ currentRow += 1
 trgMenuLbl.grid(row=currentRow, column=1)
 configIntTDSpinLbl.grid(row=currentRow, column=2)
 configIntTWSpinLbl.grid(row=currentRow, column=3)
-
+for i in range(7) : 
+	intTrgMaskBox[i].grid(row=currentRow, column=4+i)
+	
 currentRow += 1
 trgBut.grid(row=currentRow, column=0)
 trgMenu.grid(row=currentRow, column=1)
 configIntTDSpin.grid(row=currentRow, column=2)
 configIntTWSpin.grid(row=currentRow, column=3)
-for i in range(7) : 
-	intTrgMaskBox[i].grid(row=currentRow, column=4+i)
-trigWaitScl.grid(row=currentRow, column=11)
+trigWaitScl.grid(row=currentRow, column=4)
+trgNonBendEndLbl.grid(row=currentRow, column=5)
+trgNonBendEndMenu.grid(row=currentRow, column=6)
+intTrgDualBox.grid(row=currentRow, column=7)
+trgBendEndLbl.grid(row=currentRow, column=8)
+trgBendEndMenu.grid(row=currentRow, column=9)
+
 
 currentRow += 1
 pollEnableChk.grid(row=currentRow, column=0)

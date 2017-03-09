@@ -43,7 +43,10 @@ from numpy.matlib import rand
 #V0.18	01/25/17 Fixed some issues with internal trigger, adding a force button in case of missed notification.
 #V0.19	02/13/17 Improvements for new int wait trigger.  Works intermittently looking at serial stream issues in AESOP_cmd.
 #V0.20	03/01/17 Improvements for new int wait trigger including single nonbend trig plane w/ AESOP_cmd changes.  Survey changed for external only to use the trigger settings on GUI
+#V0.21	03/09/17 Changed metric for survey to be number of layers rather than number of chips
 
+
+titleVer = "Tracker Config V0.21"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -546,8 +549,8 @@ def getEvent(showPlot):
 			dataRow=[]
 			dataBoardAddress = int(Data['address']) % 8 #make address of master from 8 to 0	
 			dataFirstStrip = Data['firstStrip']
-			countTrackerChips[dataBoardAddress] += dataChips
-			countChips += dataChips #TODO actual calc of clusters 
+# 			countTrackerChips[dataBoardAddress] += dataChips
+# 			countChips += dataChips #TODO actual calc of clusters 
 			dataRow.append(datetime.datetime.utcnow())
 			dataRow.append(eventNum)
 			dataRow.append(dataBoardAddress)
@@ -558,6 +561,8 @@ def getEvent(showPlot):
 			csvW.writerow(dataRow)
 			if (dataChips > 0) : #TODO more inclusive logic
 				chipHit = True
+				countTrackerChips[dataBoardAddress] += 1
+				countChips += 1  
 	
 	eventNumVar.set("Event Num: " + str(eventNum))
 	countChipsVar.set("Total Chip Hits: " + str(countChips))
@@ -963,7 +968,7 @@ logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
 
 # create the Gui
 rootTk= Tk()
-rootTk.title("Tracker Config V0.20")
+rootTk.title(titleVer)
 newEventVar = Tkinter.BooleanVar()
 newEventVar.set(True)
 trgNoticeVar = Tkinter.BooleanVar()

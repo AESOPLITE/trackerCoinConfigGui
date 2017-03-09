@@ -43,7 +43,7 @@ from numpy.matlib import rand
 #V0.18	01/25/17 Fixed some issues with internal trigger, adding a force button in case of missed notification.
 #V0.19	02/13/17 Improvements for new int wait trigger.  Works intermittently looking at serial stream issues in AESOP_cmd.
 #V0.20	03/01/17 Improvements for new int wait trigger including single nonbend trig plane w/ AESOP_cmd changes.  Survey changed for external only to use the trigger settings on GUI
-#V0.21	03/09/17 Changed metric for survey to be number of layers rather than number of chips
+#V0.21	03/09/17 Changed metric for survey to be number of layers rather than number of chips to reduce impact of multi chip hits in a single board
 
 
 titleVer = "Tracker Config V0.21"

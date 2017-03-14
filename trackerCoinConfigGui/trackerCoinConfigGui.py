@@ -44,9 +44,10 @@ from numpy.matlib import rand
 #V0.19	02/13/17 Improvements for new int wait trigger.  Works intermittently looking at serial stream issues in AESOP_cmd.
 #V0.20	03/01/17 Improvements for new int wait trigger including single nonbend trig plane w/ AESOP_cmd changes.  Survey changed for external only to use the trigger settings on GUI
 #V0.21	03/09/17 Changed metric for survey to be number of layers rather than number of chips to reduce impact of multi chip hits in a single board
+#V0.22	03/13/17 Created errorEventDump() to send debug commands and stop reading events
 
 
-titleVer = "Tracker Config V0.21"
+titleVer = "Tracker Config V0.22"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -57,6 +58,7 @@ nError = 0
 eventNum = 0
 countEvents = 0
 countChips = 0
+errorEventExit = False
 
 
 
@@ -389,10 +391,10 @@ def eventPolling():
 	global newEventVar
 	global eventPollingTask
 	global waitNewEventTask
-
+	global errorEventExit
 # 	global eventNum
 	
-	
+	errorEventExit = False
 # # 	logging.info("init polling")
 # # 		logging.info("test polling")
 # 	trackerEventNum = getTriggerCount(0)
@@ -405,7 +407,7 @@ def eventPolling():
 # 		eventNum = trackerEventNum
 # 		logging.info("trackerEventNum = %r", trackerEventNum)
 # 	getEvent(eventPlotEnable.get())
-	if (eventPollingEnable.get()):
+	if (eventPollingEnable.get() and not errorEventExit):
 		getEvent(eventPlotEnable.get())
 		eventPollingTask = rootTk.after(20, eventPolling)
 		
@@ -499,6 +501,30 @@ def getASICDiag():
 	getTriggersASIC()
 	getASICBufferOverflows()
 	
+def errorEventDump():	
+	
+	time.sleep(0.1)	
+	
+	getMissedTrg()
+	getMissedGo()
+	getASICDiag()
+	
+	disableTrigger()
+	getFPGAconfig(0)		
+
+	time.sleep(0.1)		
+					
+	logging.info(" ")
+	logging.info("Check the ASIC error flags. . .")
+	for board in Boards:
+			for Chip in range(12):
+				logging.info("Read the ASIC configuration for FPGA %d chip %d" % (board,Chip))
+				response = readConfigReg(board,Chip)
+				logging.info("		Error flags from Chip %d are " + response[0:3],Chip)
+	
+	for board in Boards:
+			getShuntCurrent(board,'digi25')
+	
 def getEvent(showPlot):
 	#get a tracker event and plot it if showPlot is true
 	
@@ -508,6 +534,7 @@ def getEvent(showPlot):
 	global eventNumVar
 	global countChipsVar
 	global countTrackerChipsVar
+	global errorEventExit
 	pitch = 0.228						 #pitch of the detector
 	middlefirststrip = 0.035
 	gapwidth = 0.075
@@ -530,7 +557,11 @@ def getEvent(showPlot):
 	ReadTkrEventResult = ReadTkrEvent(0,False,True)	
 	logging.debug("ReadTkrEventResult = %r", ReadTkrEventResult)
 	[boardData,errorCode] = ReadTkrEventResult
-	
+	if (errorCode < 0) :
+		logging.error("Event error code %d, running debug commands and halting run", errorCode)
+		errorEventExit = True
+		errorEventDump()
+		return
 	countEvents += 1
 	chipHit = False
 	if boardData :
@@ -716,8 +747,9 @@ def surveyTrg():
 	global waitNewEventTask
 # 	global bufSpeed, fpgaTrgDly
 	global surveyTrgIterVar, surveyTrgDlyVar, surveyTrgWinVar, surveyBufSpdVar, surveyFpgaTrgDlyVar
+	global errorEventExit
 	
-	
+	errorEventExit = False
 	plt.ioff()
 	
 	minBufSpd = surveyBuffSpdMinScl.get()
@@ -774,7 +806,7 @@ def surveyTrg():
 					lastCountClusters = countChips
 					logging.info("countEvents = %d countChips = %d", countEvents, countChips)
 					iterEvents = 0
-					while (iterEvents < sampleEvents):
+					while ((iterEvents < sampleEvents) and not errorEventExit):
 						surveyTrgIterVar.set(str(iterEvents))
 		# 				while (trackerEventNum == eventNum): 
 		# 					trackerEventNum = getTriggerCount(0)
@@ -792,8 +824,10 @@ def surveyTrg():
 # 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = float(countChips - lastCountClusters) / float(countEvents - lastCountEvents)
 						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = float(countChips - lastCountClusters) / float(countEvents - lastCountEvents)
 						logging.info("eventMetrics[ %d , %d , %d , %d ] = %f", idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly, eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly])
-		
+					
+					if errorEventExit : return
 					disableTrigger()
+					
 		
 # 	logging.info("Eventmetrics = %d", eventMetrics[0][0])
 	dotColors = ['w','g','r','c','m','y','k','b']

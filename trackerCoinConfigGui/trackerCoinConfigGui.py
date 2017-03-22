@@ -45,9 +45,11 @@ from numpy.matlib import rand
 #V0.20	03/01/17 Improvements for new int wait trigger including single nonbend trig plane w/ AESOP_cmd changes.  Survey changed for external only to use the trigger settings on GUI
 #V0.21	03/09/17 Changed metric for survey to be number of layers rather than number of chips to reduce impact of multi chip hits in a single board
 #V0.22	03/13/17 Created errorEventDump() to send debug commands and stop reading events
+#V0.23	03/13/17 Additions to errorEventDump()
 
 
-titleVer = "Tracker Config V0.22"
+
+titleVer = "Tracker Config V0.23"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -339,6 +341,7 @@ def setTrg():
 			trgEventWaitVar.set(False)
 
 		
+
 def pollEnableChkCmd():
 	#Check box is clicked, start or stop eventPolling task
 	global eventPollingTask
@@ -375,6 +378,7 @@ def pollEnableChkCmd():
 		
 		for board in Boards:
 			getShuntCurrent(board,'digi25')
+
 	
 def plotEnableChkCmd():
 	if (eventPlotEnable.get()) :
@@ -502,6 +506,11 @@ def getASICDiag():
 	getASICBufferOverflows()
 	
 def errorEventDump():	
+	for board in Boards:
+		getStateVectors(board)
+		for code in range(1,7) :
+			getErrorCount(board, code)
+		
 	
 	time.sleep(0.1)	
 	
@@ -524,6 +533,17 @@ def errorEventDump():
 	
 	for board in Boards:
 			getShuntCurrent(board,'digi25')
+			
+	
+	for board in Boards:
+		getStateVectors(board)
+		for code in range(1,7) :
+			getErrorCount(board, code)
+	
+	getMissedTrg()
+	getMissedGo()
+	getASICDiag()
+		
 	
 def getEvent(showPlot):
 	#get a tracker event and plot it if showPlot is true

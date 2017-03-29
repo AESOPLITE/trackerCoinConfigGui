@@ -46,10 +46,11 @@ from numpy.matlib import rand
 #V0.21	03/09/17 Changed metric for survey to be number of layers rather than number of chips to reduce impact of multi chip hits in a single board
 #V0.22	03/13/17 Created errorEventDump() to send debug commands and stop reading events
 #V0.23	03/13/17 Additions to errorEventDump()
+#V0.24	03/27/17 Additions to errorEventDump() and AESOP_cmd
 
 
 
-titleVer = "Tracker Config V0.23"
+titleVer = "Tracker Config V0.24"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -165,7 +166,7 @@ def resetBoards():
 					nError = nError + 1
 	
 	# Load all of the threshold DACs and read them back and check the values
-	Thresholds = [21,20,20,20,20,24,20]
+	Thresholds = [22,22,22,22,22,22,22]
 	for board in Boards:
 			for chip in range(12):
 				Range = 0
@@ -242,7 +243,7 @@ def asicOff():
 def configBoards():
 	# Get trigger variables and Load all of the configuration registers and read them back, checking the settings
 	configTrgReg(configBSSpin.get(), configTDSpin.get(), configTWVar.get())
-	triggerSetup(0,int(configFDSpin.get()),1)
+	triggerSetup(7,int(configFDSpin.get()),1)
 
 
 	
@@ -341,26 +342,8 @@ def setTrg():
 			trgEventWaitVar.set(False)
 
 		
-
-def pollEnableChkCmd():
-	#Check box is clicked, start or stop eventPolling task
-	global eventPollingTask
-
+def routineErrorCheck():
 	
-	if (eventPollingEnable.get()):
-		logging.info("Enable Trigger")
-		enableTrigger()
-# 		eventPolling()
-		eventPollingTask = rootTk.after(1, eventPolling)
-
-	else : 
-		plt.ioff()
-		
-		newEventVar.set(True)
-		rootTk.after_cancel(eventPollingTask)
-		rootTk.after_cancel(waitNewEventTask)
-		logging.info("Disable Trigger")
-		disableTrigger()
 		getFPGAconfig(0)		
 	
 		time.sleep(0.1)		
@@ -374,10 +357,31 @@ def pollEnableChkCmd():
 					logging.info("		Error flags from Chip %d are " + response[0:3],Chip)
 		
 		logging.info("Turn the analog power off to the ASICs")
-		ASICpowerOFF(7)
+		#ASICpowerOFF(7)
 		
 		for board in Boards:
 			getShuntCurrent(board,'digi25')
+		
+def pollEnableChkCmd():
+	#Check box is clicked, start or stop eventPolling task
+	global eventPollingTask
+
+	
+	if (eventPollingEnable.get()):
+		logging.info("Enable Trigger")
+		enableTrigger()
+# 		eventPolling()
+		eventPollingTask = rootTk.after(1, eventPolling)
+
+	else : 
+		#plt.ioff()
+		
+		newEventVar.set(True)
+		rootTk.after_cancel(eventPollingTask)
+		rootTk.after_cancel(waitNewEventTask)
+		logging.info("Disable Trigger")
+		disableTrigger()
+		#routineErrorCheck()
 
 	
 def plotEnableChkCmd():
@@ -411,9 +415,9 @@ def eventPolling():
 # 		eventNum = trackerEventNum
 # 		logging.info("trackerEventNum = %r", trackerEventNum)
 # 	getEvent(eventPlotEnable.get())
-	if (eventPollingEnable.get() and not errorEventExit):
+	if (eventPollingEnable.get() ):
 		getEvent(eventPlotEnable.get())
-		eventPollingTask = rootTk.after(20, eventPolling)
+		if not errorEventExit : eventPollingTask = rootTk.after(20, eventPolling)
 		
 	
 
@@ -505,40 +509,22 @@ def getASICDiag():
 	getTriggersASIC()
 	getASICBufferOverflows()
 	
-def errorEventDump():	
+def getStateError():	
 	for board in Boards:
 		getStateVectors(board)
-		for code in range(1,7) :
+		if board != 0 : getEventsStreamed()
+		for code in range(1,10) :
 			getErrorCount(board, code)
 		
 	
-	time.sleep(0.1)	
+def errorEventDump():	
 	
-	getMissedTrg()
-	getMissedGo()
-	getASICDiag()
+	getStateError()
 	
-	disableTrigger()
-	getFPGAconfig(0)		
-
-	time.sleep(0.1)		
-					
-	logging.info(" ")
-	logging.info("Check the ASIC error flags. . .")
-	for board in Boards:
-			for Chip in range(12):
-				logging.info("Read the ASIC configuration for FPGA %d chip %d" % (board,Chip))
-				response = readConfigReg(board,Chip)
-				logging.info("		Error flags from Chip %d are " + response[0:3],Chip)
-	
-	for board in Boards:
-			getShuntCurrent(board,'digi25')
+	routineErrorCheck()
 			
-	
-	for board in Boards:
-		getStateVectors(board)
-		for code in range(1,7) :
-			getErrorCount(board, code)
+
+	getStateError()
 	
 	getMissedTrg()
 	getMissedGo()
@@ -808,7 +794,7 @@ def surveyTrg():
 					surveyFpgaTrgDlyVar.set(str(idxFpgaTrgDly))
 					resetBoards() # Full reset seems needed
 					configTrgReg(idxBufSpd, idxTrgDly, idxTrgWin)
-					triggerSetup(0,idxFpgaTrgDly,1)
+					triggerSetup(7,idxFpgaTrgDly,1)
 					#setTriggerSource(0) 
 					setTrg() #use exiting trigger options, must be set before survey starts
 					enableTrigger()
@@ -1132,6 +1118,8 @@ missedGoLbl = Label(frameAL, textvariable=missedGoVar)
 enableTBut = Button(frameAL, text="Enable Trig", command=enableTrigger)
 disableTBut = Button(frameAL, text="Disable Trig", command=disableTrigger)
 diagASICBut = Button(frameAL, text="Get ASIC Diag", command=getASICDiag)
+stateErrBut = Button(frameAL, text="Get State & Error", command=getStateError)
+checkASICBut = Button(frameAL, text="ASIC Error Codes", command=routineErrorCheck)
 
 eventNumVar = StringVar()
 eventNumVar.set("Event Num:    0")
@@ -1221,6 +1209,8 @@ disableTBut.grid(row=currentRow, column=3)
 missedGoBut.grid(row=currentRow, column=4)
 missedGoLbl.grid(row=currentRow, column=5)
 diagASICBut.grid(row=currentRow, column=6)
+stateErrBut.grid(row=currentRow, column=7)
+checkASICBut.grid(row=currentRow, column=8)
 
 currentRow += 1
 

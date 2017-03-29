@@ -254,6 +254,7 @@ def readEvt():
   response = []
   nByte = 0
   error = False
+  if lengthReturned == 0 : error = True
   while (length > 0): 
     Byte = ser.read()
     if Byte != '':
@@ -278,6 +279,7 @@ def readEvt():
       getErrorCount(0,5)
       getErrorCount(0,6)
       getErrorCount(0,7)
+      getErrorCount(0,8)
 
   return [response, lengthReturned]
 
@@ -294,7 +296,7 @@ def readTriggerNotice():
   return trig
 
 def readEventWait():
-  logging.debug(' Entering readEventWait')
+  #logging.debug(' Entering readEventWait')
   send(["\x00","\x57","\x00"])
   length = getRegDumpLength()
   event = False
@@ -305,7 +307,7 @@ def readEventWait():
       strByte = bin(intByte)
       logging.debug(' readEventWait Byte= ' + strByte)
       if strByte == '0b1011001': event = True # ASCII 'Y' indicates event waiting
-  logging.debug(' readEventWait returning %d',event)
+  #logging.debug(' readEventWait returning %d',event)
   return event
   
 def readTriggerOutput():
@@ -546,6 +548,10 @@ def getASICBufferOverflows():
   send(["\x00","\x55","\x00"])
   return readReg()
 
+def getEventsStreamed():
+  send(["\x00","\x5c","\x00"])
+  return readReg()
+
 def getErrorCount(Address,Code):
   if (Address < 7):
     logging.info(" Getting the error count for board %d, error code %d" % (Address,Code))
@@ -639,6 +645,15 @@ def ReadTkrEvent(tag,cal,verbose):
     stuff= readEvt()
     if stuff[1]==0:
       logging.error('ReadTkrEvent: no data packet returned for i=%d',i)
+      getStateVectors(i)
+      getErrorCount(i,1)
+      getErrorCount(i,2)
+      getErrorCount(i,3)
+      getErrorCount(i,4)
+      getErrorCount(i,5)
+      getErrorCount(i,6)
+      getErrorCount(i,7)
+      getErrorCount(i,8)
       return [boardData,-3]
     response= getBinaryString(stuff[0])
     logging.debug('    Response for packet %d is ' + response,i)

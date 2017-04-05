@@ -47,10 +47,10 @@ from numpy.matlib import rand
 #V0.22	03/13/17 Created errorEventDump() to send debug commands and stop reading events
 #V0.23	03/13/17 Additions to errorEventDump()
 #V0.24	03/27/17 Additions to errorEventDump() and AESOP_cmd
+#V0.25	04/05/17 Additions to errorEventDump() and AESOP_cmd for board addressing some commands
 
 
-
-titleVer = "Tracker Config V0.24"
+titleVer = "AESOPlite Tracker Config V0.25"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -306,10 +306,10 @@ def setTrg():
 				intTriggerType(board,'and')
 				setTriggerMask(board,intTrgMaskVarVal)
 				
-				if i in endBoards :
-					setTriggerEndLayer(i,1)
+				if board in endBoards :
+					setTriggerEndLayer(board,1)
 				else :
-					setTriggerEndLayer(i,0)
+					setTriggerEndLayer(board,0)
 				
 				Range = 0
 				Value = 22
@@ -492,6 +492,7 @@ def eventCancelWaitTask():
 				
 				
 def getMissedTrg():
+	#Get the missed trigger and update the label. Commands: 75
 	global missedTVar
 	missedTrgNum = getMissedTriggerCount(0)
 	if len(missedTrgNum) > 2 :
@@ -499,28 +500,37 @@ def getMissedTrg():
 		missedTVar.set("Missed Triggers: " + str( int(binascii.hexlify(missedTrgNum[2]),16)))
 
 def getMissedGo():
+	#Get the missed Go signal and update the label. Commands: 58
 	global missedGoVar
-	missedGoNum = getMissedGoCount()
+	missedGoNum = getMissedGoCount(0)
 	if len(missedGoNum) > 2 :
 		logging.debug("missedTrgGo = %r", missedGoNum)
 		missedGoVar.set("Missed GO: " + str( int(binascii.hexlify(missedGoNum[2]),16)))
 		
 def getASICDiag():
-	getTriggersASIC()
-	getASICBufferOverflows()
+	#Get ASIC debug info from master. Commands : 54, 55
+	getTriggersASIC(0)
+	getASICBufferOverflows(0)
 	
 def getStateError():	
+	#Get state information about all boards Commands: 5c, 68, 6a, 6b, 76, 77
 	for board in Boards:
+		logging.info("Dumping state info for board %d", board)
 		getStateVectors(board)
-		if board != 0 : getEventsStreamed()
-		for code in range(1,10) :
+		getEventsDumped(board) 
+		if board != 0 : getEventsStreamed(board)
+		getEventsAccepted(board)
+		for code in range(1,11) :
 			getErrorCount(board, code)
-		
+		getTriggerCount(board)
+		getTriggersASIC(board)
+		getASICBufferOverflows(board)
 	
 def errorEventDump():	
 	
 	getStateError()
 	
+	disableTrigger()
 	routineErrorCheck()
 			
 
@@ -528,7 +538,7 @@ def errorEventDump():
 	
 	getMissedTrg()
 	getMissedGo()
-	getASICDiag()
+	#getASICDiag()
 		
 	
 def getEvent(showPlot):
@@ -618,7 +628,7 @@ def getEvent(showPlot):
 		for Data in boardData:
 			logging.debug("Data = %r", Data)
 			for lyr in [8,1,2,3,4,5,6]:
-				logging.debug("Data['address'] = %r lyr = %r", Data['address'], lyr)
+# 				logging.debug("Data['address'] = %r lyr = %r", Data['address'], lyr)
 				if Data['address'] == lyr:			
 					if len(Data['firstStrip'])>0:
 						nLyrHit = nLyrHit + 1
@@ -1004,7 +1014,7 @@ csvW.writerow(["Timestamp", "Event Number", "Board Address", "FirstStrips List"]
 
 countTrackerChips = [0] * 7
 
-logging.info("Running the AESOP Tracker Board Test Script %s" % time.ctime())
+logging.info("Running the %s at %s", titleVer, time.ctime())
 
 # create the Gui
 rootTk= Tk()

@@ -536,20 +536,40 @@ def getMissedTriggerCount(Address):
     send([binascii.unhexlify(hexAdr),"\x75","\x00"])
     return readReg()
 
-def getMissedGoCount():
-  send(["\x00","\x58","\x00"])
+def getMissedGoCount(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x58","\x00"])
   return readReg()
 
-def getTriggersASIC():
-  send(["\x00","\x54","\x00"])
+def getTriggersASIC(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x54","\x00"])
   return readReg()
 
-def getASICBufferOverflows():
-  send(["\x00","\x55","\x00"])
+def getASICBufferOverflows(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x55","\x00"])
   return readReg()
 
-def getEventsStreamed():
-  send(["\x00","\x5c","\x00"])
+def getEventsStreamed(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x5c","\x00"])
+  return readReg()
+
+def getEventsDumped(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x6a","\x00"])
+  return readReg()
+
+def getEventsAccepted(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x6b","\x00"])
   return readReg()
 
 def getErrorCount(Address,Code):

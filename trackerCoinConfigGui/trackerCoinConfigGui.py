@@ -6,6 +6,9 @@ import matplotlib.patches as patches
 import numpy as np
 import datetime
 import csv
+import tkMessageBox
+import os
+# import Tkinter
 
 #All of the functions are stored in another file
 from AESOP_cmd import *
@@ -14,8 +17,9 @@ from AESOP_cmd import *
 # import Tkinter as Tk
 from Tkinter import *
 from numpy import dtype
-import Tkinter
+
 from numpy.matlib import rand
+# import Tkinter
 # from nltk.downloader import TKINTER
 # import Tkinter
 
@@ -48,9 +52,10 @@ from numpy.matlib import rand
 #V0.23	03/13/17 Additions to errorEventDump()
 #V0.24	03/27/17 Additions to errorEventDump() and AESOP_cmd
 #V0.25	04/05/17 Additions to errorEventDump() and AESOP_cmd for board addressing some commands
+#V0.26	04/13/17 Additions to errorEventDump() and AESOP_cmd. Labels go blank on survey exit.
+#V0.27	04/24/17 FPGA delay changed to readout after setting in survey.
 
-
-titleVer = "AESOPlite Tracker Config V0.25"
+titleVer = "AESOPlite Tracker Config V0.27"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -75,6 +80,20 @@ def endCOM():
 	closeCOM()
 	logging.info("Closed COM channel")
 
+def renameLogCreateNew():
+	renameFilename = "AESOP_log" + time.strftime("_%m_%d_%y-%H_%M", time.gmtime()) + ".txt"
+	curLogger = logging.getLogger()
+	for fh in curLogger.handlers[:] :
+		curLogger.removeHandler(fh)
+		del fh
+	os.rename(logFileName, renameFilename)
+# 	newfh = logging.FileHandler(logFileName, 'w')
+# 	curLogger.addHandler(fh)
+	setupLogging(logFileName,fileLevel,consoleLevel)
+
+	logging.info("Old Log File renamed to %s" % (renameFilename))
+	
+	
 def setBoards():
 	global Boards    # modify global copy of Boards
 	Boards = range(int(boardsSpin.get()))
@@ -100,7 +119,7 @@ def resetBoards():
 		getNumLayers(board)
 	
 	
-	logging.info("Send command to read the FPGA code verion")
+	logging.info("Send command to read the FPGA code version")
 	for board in Boards:
 		getCodeVersion(board)
 	
@@ -417,9 +436,10 @@ def eventPolling():
 # 	getEvent(eventPlotEnable.get())
 	if (eventPollingEnable.get() ):
 		getEvent(eventPlotEnable.get())
-		if not errorEventExit : eventPollingTask = rootTk.after(20, eventPolling)
-		
-	
+		if errorEventExit :
+			tkMessageBox.showerror("Tracker ERROR", "Error occurred while reading out event from tracker. \nEvent readout polling halted. \nDetails written to log file")
+		else :
+			eventPollingTask = rootTk.after(20, eventPolling)
 
 # 	else: 
 # 		logging.info("Disable Trigger")
@@ -506,7 +526,16 @@ def getMissedGo():
 	if len(missedGoNum) > 2 :
 		logging.debug("missedTrgGo = %r", missedGoNum)
 		missedGoVar.set("Missed GO: " + str( int(binascii.hexlify(missedGoNum[2]),16)))
-		
+
+def getAvgHitSize():
+	counts = getHitPacketCounts()
+	if 0==counts[0] :
+		logging.info("No hit packets since start of run")
+	else :
+		avg = float(counts[1])/counts[0]
+		logging.info("%d hit packets totaling %d bytes since start of run. Average %.2f bytes", counts[0], counts[1], avg)
+
+
 def getASICDiag():
 	#Get ASIC debug info from master. Commands : 54, 55
 	getTriggersASIC(0)
@@ -522,6 +551,8 @@ def getStateError():
 		getEventsAccepted(board)
 		for code in range(1,11) :
 			getErrorCount(board, code)
+		getErrorReturnByte(board)
+# 		getErrorStateVectors(board)
 		getTriggerCount(board)
 		getTriggersASIC(board)
 		getASICBufferOverflows(board)
@@ -804,8 +835,10 @@ def surveyTrg():
 					surveyFpgaTrgDlyVar.set(str(idxFpgaTrgDly))
 					resetBoards() # Full reset seems needed
 					configTrgReg(idxBufSpd, idxTrgDly, idxTrgWin)
-					triggerSetup(7,idxFpgaTrgDly,1)
-					#setTriggerSource(0) 
+					for board in Boards:
+						triggerSetup(board,idxFpgaTrgDly,1)
+						getTriggerSetup(board)
+										#setTriggerSource(0) 
 					setTrg() #use exiting trigger options, must be set before survey starts
 					enableTrigger()
 		# 			setTrg()
@@ -840,8 +873,15 @@ def surveyTrg():
 # 						eventMetrics[idxBufSpd, idxTrgWin, idxFpgaTrgDly, idxTrgDly] = float(countChips - lastCountClusters) / float(countEvents - lastCountEvents)
 						eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly] = float(countChips - lastCountClusters) / float(countEvents - lastCountEvents)
 						logging.info("eventMetrics[ %d , %d , %d , %d ] = %f", idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly, eventMetrics[idxBufSpd, idxTrgWin, idxTrgDly, idxFpgaTrgDly])
-					
-					if errorEventExit : return
+					surveyTrgIterVar.set("")
+					if errorEventExit : 
+						surveyBufSpdVar.set("")
+						surveyTrgWinVar.set("")
+						surveyTrgDlyVar.set("")
+						surveyFpgaTrgDlyVar.set("")
+						surveyTrgIterVar.set("")
+						tkMessageBox.showerror("Tracker ERROR", "Error occurred while reading out event from tracker. \nEvent readout polling halted. \nDetails written to log file")
+						return
 					disableTrigger()
 					
 		
@@ -880,6 +920,11 @@ def surveyTrg():
 	plt.xlabel("Delay in ns")
 	plt.ylabel("Chips per Event")
 	plt.show()
+	surveyBufSpdVar.set("")
+	surveyTrgWinVar.set("")
+	surveyTrgDlyVar.set("")
+	surveyFpgaTrgDlyVar.set("")
+	surveyTrgIterVar.set("")
 	
 def surveyTest():	
 # 	Survey and graph all possible combinations of trig delay and window
@@ -1019,13 +1064,13 @@ logging.info("Running the %s at %s", titleVer, time.ctime())
 # create the Gui
 rootTk= Tk()
 rootTk.title(titleVer)
-newEventVar = Tkinter.BooleanVar()
+newEventVar = BooleanVar()
 newEventVar.set(True)
-trgNoticeVar = Tkinter.BooleanVar()
+trgNoticeVar = BooleanVar()
 trgNoticeVar.set(False)
-trgNoticeVar = Tkinter.BooleanVar()
+trgNoticeVar = BooleanVar()
 trgNoticeVar.set(False)
-trgEventWaitVar = Tkinter.BooleanVar()
+trgEventWaitVar = BooleanVar()
 trgEventWaitVar.set(False)
 # Tk()
 frameAL=Frame(rootTk)
@@ -1045,6 +1090,8 @@ Grid.columnconfigure(frameAL, 0, weight=1)
 comSpin = Spinbox(frameAL, from_=1, to=20, width=2)
 comBut = Button(frameAL, text="COM", command=setCOM)
 comCloseBut = Button(frameAL, text="COM Close (after power cycle)", command=endCOM)
+logRenameBut = Button(frameAL, text="Rename Log, Create New", command=renameLogCreateNew)
+
 boardsSpin = Spinbox(frameAL, from_=1, to=7, width=1)
 boardsBut = Button(frameAL, text="Boards", command=setBoards)
 resetBut = Button(frameAL, text="Reset Boards", command=resetBoards)
@@ -1130,6 +1177,7 @@ disableTBut = Button(frameAL, text="Disable Trig", command=disableTrigger)
 diagASICBut = Button(frameAL, text="Get ASIC Diag", command=getASICDiag)
 stateErrBut = Button(frameAL, text="Get State & Error", command=getStateError)
 checkASICBut = Button(frameAL, text="ASIC Error Codes", command=routineErrorCheck)
+getAvgHitSizeBut = Button(frameAL, text="Hit Pkt Size", command=getAvgHitSize)
 
 eventNumVar = StringVar()
 eventNumVar.set("Event Num:    0")
@@ -1149,6 +1197,7 @@ currentRow = 0
 comBut.grid(row=currentRow, column=0)
 comSpin.grid(row=currentRow, column=1)
 comCloseBut.grid(row=currentRow, column=2)
+logRenameBut.grid(row=currentRow, column=3)
 
 currentRow += 1
 boardsBut.grid(row=currentRow, column=0)
@@ -1221,6 +1270,7 @@ missedGoLbl.grid(row=currentRow, column=5)
 diagASICBut.grid(row=currentRow, column=6)
 stateErrBut.grid(row=currentRow, column=7)
 checkASICBut.grid(row=currentRow, column=8)
+getAvgHitSizeBut.grid(row=currentRow, column=9)
 
 currentRow += 1
 
@@ -1234,6 +1284,5 @@ countTrackerChipLbl.grid(row=currentRow, column=2)
 
 # rootTk.after(1000, eventPolling)
 rootTk.mainloop()
-
 #TODO add current monitor button
 

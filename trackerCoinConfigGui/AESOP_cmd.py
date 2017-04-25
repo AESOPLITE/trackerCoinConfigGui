@@ -8,26 +8,30 @@ from bitstring import BitArray
 import select
 import struct
 
+# Globals
+cntHitPackets = 0
+cntHitPacketBytes = 0
+
 # Python functions used for testing the AESOP-Lite tracker boards
 
 # ---- The user script needs to call this to set up the logging to console and file ------
 
 def setupLogging(logFileName,fileLevel,consoleLevel):
-    logging.basicConfig(level=fileLevel,
-                        format='%(asctime)s %(name)-4s %(levelname)-4s %(message)s',
-                        datefmt='%m-%d %H:%M',
-                        filename=logFileName,
-                        filemode='w')
-    # define a Handler which writes INFO messages or higher to the sys.stderr
-    console = logging.StreamHandler()
-    console.setLevel(consoleLevel)
-    # set a format which is simpler for console use
-    formatter = logging.Formatter('%(name)-4s: %(levelname)-4s %(message)s')
-    # tell the handler to use this format
-    console.setFormatter(formatter)
-    # add the handler to the root logger
-    logging.getLogger('').addHandler(console)
-    logging.info("Logging will go to file %s with level %d and to console with level %d" % (logFileName,fileLevel,consoleLevel))
+  logging.basicConfig(level=fileLevel,
+                      format='%(asctime)s %(name)-4s %(levelname)-4s %(message)s',
+                      datefmt='%m-%d %H:%M',
+                      filename=logFileName,
+                      filemode='w')
+  # define a Handler which writes INFO messages or higher to the sys.stderr
+  console = logging.StreamHandler()
+  console.setLevel(consoleLevel)
+  # set a format which is simpler for console use
+  formatter = logging.Formatter('%(name)-4s: %(levelname)-4s %(message)s')
+  # tell the handler to use this format
+  console.setFormatter(formatter)
+  # add the handler to the root logger
+  logging.getLogger('').addHandler(console)
+  logging.info("Logging will go to file %s with level %d and to console with level %d" % (logFileName,fileLevel,consoleLevel))
 
 # ------------------------- List and string handling utilities --------------------------
 
@@ -579,6 +583,18 @@ def getErrorCount(Address,Code):
     hexCode = '0%x' % Code
     send([binascii.unhexlify(hexAdr),"\x77","\x01",binascii.unhexlify(hexCode)])
     return readReg()
+
+def getErrorReturnByte(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+  send([binascii.unhexlify(hexAdr),"\x78","\x00"])
+  return readReg()
+
+# def getErrorStateVectors(Address):
+#   if (Address < 7):
+#     hexAdr = '0%x' % Address
+#   send([binascii.unhexlify(hexAdr),"\x79","\x00"])
+#   return readReg()
     
 # ------------ ASIC commands ---------------------------------------------------------------
 
@@ -624,6 +640,7 @@ def CalibrationStrobe(Address,Chip,TrgDly,TrgTag,FPGA):
   return stuff
 
 def ReadTkrEvent(tag,cal,verbose):
+  global cntHitPackets, cntHitPacketBytes  
   if not cal:
     send(["\x07","\x01","\x01","\x00"])
   else:
@@ -680,7 +697,12 @@ def ReadTkrEvent(tag,cal,verbose):
     numberOfChips, firstStripChip, FPGAaddress = ParseASIChitList(response, verbose)
     thisBoardData = {'nChips': numberOfChips, 'firstStrip': firstStripChip, 'address': FPGAaddress}
     boardData.append(thisBoardData)
+    cntHitPackets += 1 #update hit packet counters
+    cntHitPacketBytes += stuff[1]
   return [boardData,0]
+
+def getHitPacketCounts():
+  return [cntHitPackets, cntHitPacketBytes]
 
 def ParseASIChitList(bitString, verbose):
   pointer = 0    

@@ -716,9 +716,9 @@ def ParseASIChitList(bitString, verbose):
   else:
     #logging.info("Identifier byte = %s", bitString[0:8])
     pointer = pointer + 9
-    FPGAaddress = int(bitString[pointer:pointer+4],2)
+    FPGAaddress = int(bitString[pointer:pointer+7],2)
     if verbose: logging.info("ASIC hit list for FPGA address %d",FPGAaddress)
-    pointer = pointer + 4
+    pointer = pointer + 7
     FPGAheader = bitString[pointer:pointer+12]
     pointer = pointer + 12
     numberOfChips = int(FPGAheader[8:12],2)

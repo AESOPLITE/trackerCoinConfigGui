@@ -54,8 +54,10 @@ from numpy.matlib import rand
 #V0.25	04/05/17 Additions to errorEventDump() and AESOP_cmd for board addressing some commands
 #V0.26	04/13/17 Additions to errorEventDump() and AESOP_cmd. Labels go blank on survey exit.
 #V0.27	04/24/17 FPGA delay changed to readout after setting in survey.
+#V0.28	05/03/17 Changed delay setting in survey.
 
-titleVer = "AESOPlite Tracker Config V0.27"
+
+titleVer = "AESOPlite Tracker Config V0.28"
 #
 #TODO coin rate 40hz set poll rate accordingly
 

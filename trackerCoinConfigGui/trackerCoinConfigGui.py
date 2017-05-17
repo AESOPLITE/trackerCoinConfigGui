@@ -55,9 +55,9 @@ from numpy.matlib import rand
 #V0.26	04/13/17 Additions to errorEventDump() and AESOP_cmd. Labels go blank on survey exit.
 #V0.27	04/24/17 FPGA delay changed to readout after setting in survey.
 #V0.28	05/03/17 Changed delay setting in survey.
+#V0.29	05/17/17 Changed survey to use int or ext delay based on trigger settings.
 
-
-titleVer = "AESOPlite Tracker Config V0.28"
+titleVer = "AESOPlite Tracker Config V0.29"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -264,7 +264,16 @@ def asicOff():
 def configBoards():
 	# Get trigger variables and Load all of the configuration registers and read them back, checking the settings
 	configTrgReg(configBSSpin.get(), configTDSpin.get(), configTWVar.get())
-	triggerSetup(7,int(configFDSpin.get()),1)
+# 	triggerSetup(7,int(configFDSpin.get()),1)
+	triggerDelay = int(configIntTDSpin.get())
+	triggerWidth = int(configIntTWSpin.get())
+	triggerExtDelay = int(configFDSpin.get())
+	logging.info("Setting ext trigger %d int trigger %d, %d", triggerExtDelay, triggerDelay,triggerWidth)
+	for board in Boards:
+		triggerSetup(board,triggerExtDelay,1)
+		getTriggerSetup(board)
+		intTriggerSetup(board,triggerDelay,triggerWidth)
+		getIntTriggerSetup(board)
 
 
 	
@@ -308,10 +317,10 @@ def setTrg():
 		logging.info("Setting trigger source to %d", trgKey)
 		setTriggerSource(trgKey)
 		if trgKey > 0 : #the internal trigger must be set from the relevant spinboxes
-			triggerDelay = int(configIntTDSpin.get())
-			triggerWidth = int(configIntTWSpin.get())
-			logging.info("Setting int trigger %d, %d", triggerDelay,triggerWidth)
-			intTriggerSetup(7,triggerDelay,triggerWidth)
+# 			triggerDelay = int(configIntTDSpin.get())
+# 			triggerWidth = int(configIntTWSpin.get())
+# 			logging.info("Setting int trigger %d, %d", triggerDelay,triggerWidth)
+# 			intTriggerSetup(7,triggerDelay,triggerWidth)
 			endBoards = []
 			tempBoard = trgNonBendEndVar.get()
 			if tempBoard != "":
@@ -817,12 +826,18 @@ def surveyTrg():
 	eventMetrics = np.zeros((maxBufSpd,maxTrgWin,maxTrgDly,maxFpgaTrgDly),dtype=float,order='C')
 
 	sampleEvents = surveyTrgIterScl.get()
+		
+	trgKey = trgList.get(trgVar.get(), -1)
+	if (trgKey < 0) : 
+		tkMessageBox.showerror("Survey ERROR", "Error occurred in Survey settings")
+		return
+
 # 	for idxBufSpd in rangeBufSpd:
 # 		for idxTrgWin in rangeTrgWin:
 # 			for idxFpgaTrgDly in rangeFpgaTrgDly :
 # 				timeDly = list(map(lambda x: ((((idxBufSpd + 1) * x) + idxFpgaTrgDly) * 100), rangeTrgDly))
 # 				logging.info("timeDly[ %d , %d , %d] = %r", idxBufSpd, idxTrgWin, idxFpgaTrgDly, timeDly)
-
+	plt.clf()
 	for idxBufSpd in rangeBufSpd:
 		surveyBufSpdVar.set(str(idxBufSpd))
 		for idxTrgWin in rangeTrgWin:
@@ -837,9 +852,14 @@ def surveyTrg():
 					surveyFpgaTrgDlyVar.set(str(idxFpgaTrgDly))
 					resetBoards() # Full reset seems needed
 					configTrgReg(idxBufSpd, idxTrgDly, idxTrgWin)
-					for board in Boards:
-						triggerSetup(board,idxFpgaTrgDly,1)
-						getTriggerSetup(board)
+					if (trgKey > 0) :
+						for board in Boards:
+							intTriggerSetup(board,idxFpgaTrgDly,6)
+							getIntTriggerSetup(board)
+					else : 
+						for board in Boards:
+							triggerSetup(board,idxFpgaTrgDly,1)
+							getTriggerSetup(board)
 										#setTriggerSource(0) 
 					setTrg() #use exiting trigger options, must be set before survey starts
 					enableTrigger()
@@ -916,11 +936,11 @@ def surveyTrg():
 				plt.errorbar(timeDly, eventMetrics[idxBufSpd,idxTrgWin,idxTrgDly,rangeFpgaTrgDly], 0, error, dotColors[idxBufSpd] + dotTypes[idxTrgDly] + lineTypes[idxTrgWin], label= str(autoLabel + 'BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin) + ' TD ' + str(idxTrgDly))) 
 	# 			eventLabels[(idxBufSpd - minBufSpd) * len(rangeTrgWin) + (idxTrgWin - minTrgWin) ] = 'BufS ' + str(idxBufSpd) + ' Win ' + str(idxTrgWin)
 # 	l1, l2 = plt.plot(rangeTrgDly, eventMetrics[0,:], 'bs-', rangeTrgDly, eventMetrics[1,:], 'ro-')
-	plt.title("Detector Chips / Events (Sample: " + str(sampleEvents) + " events)")
+	plt.title("Detector Layers / Events (Sample: " + str(sampleEvents) + " events)")
 # 	plt.figlegend(eventPlots, 'lower right')
 	plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='small')
 	plt.xlabel("Delay in ns")
-	plt.ylabel("Chips per Event")
+	plt.ylabel("Layers per Event")
 	plt.show()
 	surveyBufSpdVar.set("")
 	surveyTrgWinVar.set("")
@@ -1106,7 +1126,7 @@ configTWVar = IntVar()
 configTWChk = Checkbutton(frameAL, text="Trig Win=1", variable=configTWVar)
 configBSLbl = Label(frameAL, text="Buf Speed")
 configBSSpin = Spinbox(frameAL, from_=0, to=7, width=1) #3 bits
-configFDLbl = Label(frameAL, text="FPGA Delay")
+configFDLbl = Label(frameAL, text="Ext Delay")
 configFDSpin = Spinbox(frameAL, from_=0, to=255, width=3) #5 bits of trigger delay in register
 trgBut = Button(frameAL, text="Trigger", command=setTrg)
 trgMenuLbl = Label(frameAL, text="Source")
@@ -1114,7 +1134,7 @@ trgVar = StringVar()
 trgMenu = OptionMenu(frameAL,trgVar, *sorted(trgList.viewkeys()))
 configIntTDSpin = Spinbox(frameAL, from_=0, to=255, width=3)
 configIntTDSpinLbl = Label(frameAL, text="Int Delay")
-configIntTWSpin = Spinbox(frameAL, from_=0, to=255, width=3)
+configIntTWSpin = Spinbox(frameAL, from_=1, to=255, width=3)
 configIntTWSpinLbl = Label(frameAL, text="Int Width")
 
 intTrgMaskVar = [0]*7
@@ -1211,6 +1231,8 @@ configTDLbl.grid(row=currentRow, column=1)
 asicOffBut.grid(row=currentRow, column=2)
 configBSLbl.grid(row=currentRow, column=3)
 configFDLbl.grid(row=currentRow, column=4)
+configIntTDSpinLbl.grid(row=currentRow, column=5)
+configIntTWSpinLbl.grid(row=currentRow, column=6)
 
 currentRow += 1
 configBut.grid(row=currentRow, column=0)
@@ -1218,26 +1240,24 @@ configTDSpin.grid(row=currentRow, column=1)
 configTWChk.grid(row=currentRow, column=2)
 configBSSpin.grid(row=currentRow, column=3)
 configFDSpin.grid(row=currentRow, column=4)
+configIntTDSpin.grid(row=currentRow, column=5)
+configIntTWSpin.grid(row=currentRow, column=6)
 
 
 currentRow += 1
 trgMenuLbl.grid(row=currentRow, column=1)
-configIntTDSpinLbl.grid(row=currentRow, column=2)
-configIntTWSpinLbl.grid(row=currentRow, column=3)
 for i in range(7) : 
-	intTrgMaskBox[i].grid(row=currentRow, column=4+i)
+	intTrgMaskBox[i].grid(row=currentRow, column=2+i)
 	
 currentRow += 1
 trgBut.grid(row=currentRow, column=0)
 trgMenu.grid(row=currentRow, column=1)
-configIntTDSpin.grid(row=currentRow, column=2)
-configIntTWSpin.grid(row=currentRow, column=3)
-trigWaitScl.grid(row=currentRow, column=4)
-trgNonBendEndLbl.grid(row=currentRow, column=5)
-trgNonBendEndMenu.grid(row=currentRow, column=6)
-intTrgDualBox.grid(row=currentRow, column=7)
-trgBendEndLbl.grid(row=currentRow, column=8)
-trgBendEndMenu.grid(row=currentRow, column=9)
+trigWaitScl.grid(row=currentRow, column=2)
+trgNonBendEndLbl.grid(row=currentRow, column=3)
+trgNonBendEndMenu.grid(row=currentRow, column=4)
+intTrgDualBox.grid(row=currentRow, column=5)
+trgBendEndLbl.grid(row=currentRow, column=6)
+trgBendEndMenu.grid(row=currentRow, column=7)
 
 
 currentRow += 1

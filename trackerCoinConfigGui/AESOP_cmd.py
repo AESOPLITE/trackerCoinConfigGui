@@ -459,6 +459,13 @@ def getTriggerSetup(Address):
     return readReg()
   else: logging.error("getTriggerSetup: bad address %s",Address)
 
+def getIntTriggerSetup(Address):
+  if (Address < 7):
+    hexAddr = "0%x" % Address
+    send([binascii.unhexlify(hexAddr),"\x71","\x00"])
+    return readReg()
+  else: logging.error("getIntTriggerSetup: bad address %s",Address)
+
 def setTriggerMask(Address,Value):
   logging.info("Setting the trigger mask for board %d to %d" % (Address,Value))
   hexAddr = "0%x" % Address

@@ -533,12 +533,12 @@ def getTriggerCount(Address):
     send([binascii.unhexlify(hexAdr),"\x68","\x00"])
     stuff=readReg()
     if stuff[1] == '68':
-        logging.debug("getTriggerCount, Byte2=%s",getBinaryString(stuff[2]))
-        logging.debug("getTriggerCount, Byte3=%s",getBinaryString(stuff[3]))
-        numb = getBinaryString(stuff[2]) + getBinaryString(stuff[3])
-        logging.debug("getTriggerCount, Count=%s",numb)
-        numbInt= int(numb,2)
-        return numbInt
+      logging.debug("getTriggerCount, Byte2=%s",getBinaryString(stuff[2]))
+      logging.debug("getTriggerCount, Byte3=%s",getBinaryString(stuff[3]))
+      numb = getBinaryString(stuff[2]) + getBinaryString(stuff[3])
+      logging.debug("getTriggerCount, Count=%s",numb)
+      numbInt= int(numb,2)
+      return numbInt
     else: return 0
     
 def getMissedTriggerCount(Address):
@@ -590,6 +590,27 @@ def getErrorCount(Address,Code):
     hexCode = '0%x' % Code
     send([binascii.unhexlify(hexAdr),"\x77","\x01",binascii.unhexlify(hexCode)])
     return readReg()
+
+
+def measureTriggerRate(Address):
+  if (Address < 7):
+    logging.info("  Measuring the trigger rate for board %d" % (Address))
+    hexAdr = '0%x' % Address
+    send([binascii.unhexlify(hexAdr),"\x6C","\x00"])
+  
+def getTriggerRate(Address):
+  if (Address < 7):
+    hexAdr = '0%x' % Address
+    send([binascii.unhexlify(hexAdr),"\x6D","\x00"])
+    stuff=readReg()
+    if stuff[1] == '6d':
+      logging.info("getTriggerRate, Byte2=%s",getBinaryString(stuff[2]))
+      logging.info("getTriggerRate, Byte3=%s",getBinaryString(stuff[3]))
+      numb = getBinaryString(stuff[2]) + getBinaryString(stuff[3])
+      logging.info("getTriggerRate, Count=%s",numb)
+      numbInt= int(numb,2)
+      return numbInt
+    else: return 0
 
 def getErrorReturnByte(Address):
   if (Address < 7):
@@ -680,7 +701,7 @@ def ReadTkrEvent(tag,cal,verbose):
   if verbose: logging.info('  Event number %d',EvtNum)  
   cmdCount = int(binascii.hexlify(response[3]),16)
   if verbose: logging.info('  Command count= %d',cmdCount)
-  nDataPacks = int(binascii.hexlify(response[4]),16) % 8
+  nDataPacks = int(binascii.hexlify(response[4]),16)
   if verbose: logging.info('  Expecting %d data packets...',nDataPacks)
   if nDataPacks > 7:
     logging.error('  Too many data packets specified:  n=%d',nDataPacks)

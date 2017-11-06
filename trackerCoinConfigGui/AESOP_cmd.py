@@ -701,7 +701,7 @@ def ReadTkrEvent(tag,cal,verbose):
   if verbose: logging.info('  Event number %d',EvtNum)  
   cmdCount = int(binascii.hexlify(response[3]),16)
   if verbose: logging.info('  Command count= %d',cmdCount)
-  nDataPacks = int(binascii.hexlify(response[4]),16)
+  nDataPacks = int(binascii.hexlify(response[4]),16) % 32 #exclude 2 MSB to indicate bending and non-bending triggers
   if verbose: logging.info('  Expecting %d data packets...',nDataPacks)
   if nDataPacks > 7:
     logging.error('  Too many data packets specified:  n=%d',nDataPacks)

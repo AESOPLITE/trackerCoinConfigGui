@@ -57,9 +57,10 @@ from numpy.matlib import rand
 #V0.28	05/03/17 Changed delay setting in survey.
 #V0.29	05/17/17 Changed survey to use int or ext delay based on trigger settings.
 #V0.30	10/26/17 Added min setup options to keep defaults
+#V0.31	11/03/17 Fixed drive gain in ASIC config. In AESOP_cmd masked out MSB trig out of the number of bytes in event. 
 
 
-titleVer = "AESOPlite Tracker Config V0.30"
+titleVer = "AESOPlite Tracker Config V0.31"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -260,9 +261,9 @@ def resetBoards():
 	
 def resetMinBoards():
 	#reset the board and issue one time configuration settings
-	global nError
-	trgNoticeVar.set(False)
-	trgEventWaitVar.set(True)
+# 	global nError
+# 	trgNoticeVar.set(False)
+# 	trgEventWaitVar.set(True)
 	logging.info("Reseting these Boards %s" % Boards)
 	logging.info("Send a reset to the FPGAs")
 # 	for board in Boards:
@@ -304,120 +305,76 @@ def resetMinBoards():
 	trgEventWaitVar.set(True)
 
 
-# def readBoardSettings():
-# 	#read the board configuration settings
-# 	logging.info("Reading these Boards %s" % Boards)
-# 	for board in Boards:
-# 	
-# 	
-# 	
-# 		logging.info("Get the number of layers in the readout")
-# 
-# 		getNumLayers(board)
-# 	
-# 	
-# 		logging.info("Send command to read the FPGA code version")
-# 		getCodeVersion(board)
-# 	
-# 
-# 		getBusVoltage(board,'flash18')
-# 		getBusVoltage(board,'fpga12')
-# 		getBusVoltage(board,'digi25')
-# 		getBusVoltage(board,'i2c33')
-# 		getBusVoltage(board,'analog21')
-# 		getBusVoltage(board,'analog33')
-# 		getShuntCurrent(board,'flash18')
-# 		getShuntCurrent(board,'fpga12')
-# 		getShuntCurrent(board,'digi25')
-# 		getShuntCurrent(board,'i2c33')
-# 		getShuntCurrent(board,'analog21')
-# 		getShuntCurrent(board,'analog33')
-# 		getShuntCurrent(board,'bias100')
-# 		getTemperature(board)
-# 	
-# 	
-# 		logging.info("Read the i2c error codes")
-# 		i2cErrors(board)
-# 	
-# 	# These config settings could only need to be run once with no GUI variables so placing them here.  Ordering of commands should work
-# 	# Load all of the calibration DACs and read them back and check the values
-# 		for chip in range(12):
-# 			logging.info("Read the ASIC calibration DAC for chip %d",chip)
-# 			response = readCalDAC(board,chip)
-# 			# Load all of the threshold DACs and read them back and check the values
-# 
-# 			logging.info("Read the ASIC threshold DAC for chip %d",chip)
-# 			response = readThrDAC(board,chip)	
-# 	
-# 	Thresholds = [22,22,22,22,22,22,22]
-# 	for board in Boards:
-# 			for chip in range(12):
-# 				Range = 0
-# 				Value = Thresholds[board]		
-# 				logging.info("Load the ASIC threshold DAC for chip %d of board %d" % (chip,board))
-# 				loadThrDAC(board,chip,Range,Value)
-# 				
-# 				logging.debug("DAC register read response=%s",response)
-# 				if int(response[0],2) != Range: 
-# 					logging.error('		Wrong range returned by chip %d for the threshold DAC setting',chip)
-# 					nError = nError + 1
-# 				if int(response[1:8],2) != Value: 
-# 					logging.error('		Wrong value returned by chip %d for the threshold DAC setting',chip)	
-# 					nError = nError + 1
-# 			
-# 	# Load all of the calibration masks and read them back and check the settings
-# 	for board in []:	 
-# 			for Chip in range(11,-1,-1):
-# 				Mask= '0010010000000001110000000000000000000000000000000100000000000001'
-# 			#		  '0123456789012345678901234567890123456789012345678901234567890123'
-# 				logging.info("Load an ASIC calibration mask for chip %d on board %d with %s" % (Chip,board,Mask))
-# 				loadCalMask(board,Chip,Mask)
-# 				logging.info("Read the ASIC calibration mask")
-# 				response = readCalMask(board,Chip)
-# 				if response != Mask:
-# 					logging.error('	 Wrong calibration mask returned by chip %d: ' + response,Chip)
-# 					nError = nError + 1
-# 		
-# 	# Load all of the data masks and read them back and check the settings 
-# 	for board in []: 
-# 			for Chip in range(12):
-# 				Mask= '1111111111111111111111111111111111111111111111111111111111111111'
-# 			#		  '0123456789012345678901234567890123456789012345678901234567890123'
-# 				logging.info("Load an ASIC data mask for chip %d of board %d with %s" % (Chip,board,Mask))
-# 				loadDataMask(board,Chip,Mask)
-# 				logging.info("Read the ASIC data mask")
-# 				response = readDataMask(board,Chip)
-# 				if response != Mask:
-# 					logging.error('	 Wrong data mask returned by chip %d',Chip)
-# 					nError = nError + 1
-# 	
-# 			
-# 	# Load all of the trigger masks and read them back and check the settings	
-# 	for board in Boards:
-# 			for Chip in range(12):
-# 				if Chip == 0 or Chip == 6:	#Disable trigger from 1st and last strips of each SSD
-# 					Mask=	 '1111111111111111111111111111111111111111111111111111111111111110'
-# 				else: 
-# 					if Chip == 5 or Chip == 11: 
-# 						Mask= '0111111111111111111111111111111111111111111111111111111111111111'
-# 					else:
-# 						Mask= '1111111111111111111111111111111111111111111111111111111111111111'
-# 			#		          '0123456789012345678901234567890123456789012345678901234567890123'
-# 				logging.info("Load an ASIC trigger mask for chip %d on board %d with %s" % (Chip,board,Mask))
-# 				loadTrgMask(board,Chip,Mask)
-# 				logging.info("Read the ASIC trigger mask")
-# 				response = readTrgMask(board,Chip)
-# 				if response != Mask:
-# 					logging.error('	 Wrong trigger mask returned by chip %d' % (Chip)) 
-# 					nError = nError + 1		
-# 	
-# 	
-# # 	triggerSetup(0,0,1)
-# 
-# 
-# 	logging.info("The number of register load/read errors= %d",nError)
-# 		
-# 	
+def readBoardsConf():
+	#read the board configuration settings
+	logging.info("Reading these Boards %s" % Boards)
+	for board in Boards:
+	
+	
+	
+		logging.info("Get the number of layers in the readout")
+
+		getNumLayers(board)
+	
+	
+		logging.info("Send command to read the FPGA code version")
+		getCodeVersion(board)
+	
+
+		getBusVoltage(board,'flash18')
+		getBusVoltage(board,'fpga12')
+		getBusVoltage(board,'digi25')
+		getBusVoltage(board,'i2c33')
+		getBusVoltage(board,'analog21')
+		getBusVoltage(board,'analog33')
+		getShuntCurrent(board,'flash18')
+		getShuntCurrent(board,'fpga12')
+		getShuntCurrent(board,'digi25')
+		getShuntCurrent(board,'i2c33')
+		getShuntCurrent(board,'analog21')
+		getShuntCurrent(board,'analog33')
+		getShuntCurrent(board,'bias100')
+		getTemperature(board)
+
+		logging.info("Read the i2c error codes")
+		i2cErrors(board)
+
+		getTriggerSetup(board)
+		getIntTriggerSetup(board)
+
+		getFPGAconfig(board)
+		getGoClockCycles()
+
+	# These config settings could only need to be run once with no GUI variables so placing them here.  Ordering of commands should work
+	# Load all of the calibration DACs and read them back and check the values
+		for chip in range(12):
+			logging.info("Read the ASIC calibration DAC for chip %d",chip)
+			response = readCalDAC(board,chip)
+			# Load all of the threshold DACs and read them back and check the values
+
+			logging.info("Read the ASIC threshold DAC for chip %d",chip)
+			response = readThrDAC(board,chip)	
+			logging.debug("DAC register read response=%s",response)
+			
+	# Load all of the calibration masks and read them back and check the settings
+			logging.info("Read the ASIC calibration mask")
+			response = readCalMask(board,chip)
+	
+	# Load all of the data masks and read them back and check the settings 
+	
+			logging.info("Read the ASIC data mask")
+			response = readDataMask(board,chip)
+				
+
+	# Load all of the trigger masks and read them back and check the settings	
+
+			logging.info("Read the ASIC trigger mask")
+			response = readTrgMask(board,chip)
+			
+			logging.info("Read the ASIC configuration for chip %d on board %d" % (chip,board))
+			response = readConfigReg(board,chip)
+
+	
 def asicOff():
 	ASICpowerOFF(7)	
 	logging.info("Turn the power off to the ASICs")
@@ -449,13 +406,13 @@ def configTrgReg(bufSpeed, trgDly, trgWin):
 # 	Address = 0
 	Polarity = 0
 	oneShot = 0
-	Gain = 2
+	Gain = 0
 	shapingTime = 1
 # 	bufSpeed = 3
 # 	TrgDly = 3
 # 	TrgDly = configTDSpin.get()
 # 	TrgWin = 1
-	Drive = 0
+	Drive = 2
 	MxClus = 10
 	for board in Boards:
 		for Chip in range(12):
@@ -521,9 +478,9 @@ def setTrg():
 					intTriggerType(board,'and')
 					setTriggerMask(board,intTrgMaskVarVal)
 					Range = 0
-					Value = 22
-					if intTrgMaskVarVal :
-						Value = 28
+					Value = 28 #22
+					#if intTrgMaskVarVal :
+					#	Value = 28
 					for chip in range(12):
 						logging.info("Set the ASIC threshold DAC for chip %d of board %d to %d" % (chip,board,Value))
 						loadThrDAC(board,chip,Range,Value)
@@ -1301,6 +1258,7 @@ boardsSpin = Spinbox(frameAL, from_=1, to=7, width=1)
 boardsBut = Button(frameAL, text="Boards", command=setBoards)
 resetBut = Button(frameAL, text="Reset Boards", command=resetBoards)
 resetMinBut = Button(frameAL, text="Reset Min", command=resetMinBoards)
+readBoardsConfBut = Button(frameAL, text="Read Boards Conf", command=readBoardsConf)
 
 asicOffBut = Button(frameAL, text="ASIC Power Off", command=asicOff)
 asicOnBut = Button(frameAL, text="ASIC Power On", command=asicOn)
@@ -1411,6 +1369,7 @@ logRenameBut.grid(row=currentRow, column=3)
 currentRow += 1
 boardsBut.grid(row=currentRow, column=0)
 boardsSpin.grid(row=currentRow, column=1)
+readBoardsConfBut.grid(row=currentRow, column=2)
 
 currentRow += 1
 resetMinBut.grid(row=currentRow, column=0)

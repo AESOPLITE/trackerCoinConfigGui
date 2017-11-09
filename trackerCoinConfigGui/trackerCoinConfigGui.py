@@ -58,9 +58,9 @@ from numpy.matlib import rand
 #V0.29	05/17/17 Changed survey to use int or ext delay based on trigger settings.
 #V0.30	10/26/17 Added min setup options to keep defaults
 #V0.31	11/03/17 Fixed drive gain in ASIC config. In AESOP_cmd masked out MSB trig out of the number of bytes in event. 
+#V0.32	11/09/17 Added trigger plane output and Robert's CRC6 code.
 
-
-titleVer = "AESOPlite Tracker Config V0.31"
+titleVer = "AESOPlite Tracker Config V0.32"
 #
 #TODO coin rate 40hz set poll rate accordingly
 

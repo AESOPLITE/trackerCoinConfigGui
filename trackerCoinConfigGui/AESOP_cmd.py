@@ -706,6 +706,8 @@ def ReadTkrEvent(tag,cal,verbose):
   if nDataPacks > 7:
     logging.error('  Too many data packets specified:  n=%d',nDataPacks)
     return [boardData,-2]
+  triggers = int(binascii.hexlify(response[4]),16) & 192 #mask off the trigger 2 MSB
+  logging.info("Internally Triggered by %s", {192:"both planes", 128:"bending plane", 64:"non-bending plane", 0:"NO plane"}[triggers] )
   for i in range(nDataPacks):
     stuff= readEvt()
     if stuff[1]==0:
@@ -721,6 +723,11 @@ def ReadTkrEvent(tag,cal,verbose):
       getErrorCount(i,8)
       return [boardData,-3]
     response= getBinaryString(stuff[0])
+    chkStrng = '1' + response # add the start bit back in, as it is included in the CRC
+    chkStrng = chkStrng.rstrip("0") # remove any trailing zeroes
+    chkStrng = chkStrng[0:len(chkStrng)-2] # remove the 11 from the end of the string
+    if not checkCRC6(chkStrng):
+      logging.info(' CRC error detected in event response %d ' + response,i)
     logging.debug('    Response for packet %d is ' + response,i)
     numberOfChips, firstStripChip, FPGAaddress = ParseASIChitList(response, verbose)
     thisBoardData = {'nChips': numberOfChips, 'firstStrip': firstStripChip, 'address': FPGAaddress}
@@ -728,6 +735,39 @@ def ReadTkrEvent(tag,cal,verbose):
     cntHitPackets += 1 #update hit packet counters
     cntHitPacketBytes += stuff[1]
   return [boardData,0]
+
+
+
+# ---------------------------------- CRC Error checking ---------------------------------
+
+def CRC6(bitString): # 1'100101
+  divisor = "1100101"
+  result = bitString 
+  for i in range(len(result) - len(divisor)+1):
+    #print result#result[0:(len(result)-len(divisor)+1)] , result[(len(result)-len(divisor)+1):]
+    if (result[i] == "1"):
+      for j in range(len(divisor)):
+          if (result[i+j] == divisor[j]):
+            result = result[0:i+j] + "0" + result[i+j+1:len(result)]
+          else:
+            result = result[0:i+j] + "1" + result[i+j+1:len(result)]
+    #if (i == len(result)-len(divisor)-1):
+      #print "-1", result[len(result)-6:],
+    #print " "*i+divisor
+  #print result
+  #print CRC0
+  return result[len(result)-6:]
+  
+def checkCRC6(bitString):
+  #print bitString
+  #print bitString[0:(len(bitString) - 6)]
+  #print CRC6(bitString[0:(len(bitString) - 6)])
+  #print bitString[(len(bitString) - 6):len(bitString)]
+  if (CRC6(bitString[0:(len(bitString) - 6)]) == bitString[(len(bitString) - 6):len(bitString)]):
+    return True
+  else:
+    return False    
+
 
 def getHitPacketCounts():
   return [cntHitPackets, cntHitPacketBytes]

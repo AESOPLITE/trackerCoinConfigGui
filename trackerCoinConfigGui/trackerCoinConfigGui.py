@@ -59,8 +59,10 @@ from numpy.matlib import rand
 #V0.30	10/26/17 Added min setup options to keep defaults
 #V0.31	11/03/17 Fixed drive gain in ASIC config. In AESOP_cmd masked out MSB trig out of the number of bytes in event. 
 #V0.32	11/09/17 Added trigger plane output and Robert's CRC6 code.
+#V0.33	11/16/17 Removed redundant ASIC init
 
-titleVer = "AESOPlite Tracker Config V0.32"
+
+titleVer = "AESOPlite Tracker Config V0.33"
 #
 #TODO coin rate 40hz set poll rate accordingly
 
@@ -293,10 +295,10 @@ def resetMinBoards():
 	
 	
 #	ASICinitialize(7)
-	logging.info("Set the ASIC default configuration")
-	for board in Boards:
-		ASICinitialize(board)
-		time.sleep(0.1)
+# 	logging.info("Set the ASIC default configuration")
+# 	for board in Boards:
+# 		ASICinitialize(board)
+# 		time.sleep(0.1)
 	
 	logging.info("Reset the i2c state machines")
 	i2cReset(7)
